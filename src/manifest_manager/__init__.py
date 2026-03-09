@@ -15,7 +15,7 @@ from .config import Config
 from .id_sidecar import IDSidecar
 from .storage import StorageManager, PasswordRequired
 
-__version__ = "3.4.0"
+__version__ = "3.5.0"
 __all__ = [
     "ManifestRepository",
     "NodeSpec",

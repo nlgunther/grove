@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Manifest Manager CLI v3.4
+Manifest Manager CLI v3.5
 ==========================
 
 Interactive shell for hierarchical XML data management.
@@ -178,7 +178,7 @@ def backup_sidecar(original_path: str, backup_path: str) -> bool:
 
 CHEATSHEET = """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                      MANIFEST MANAGER v3.4 CHEATSHEET                         ║
+║                      MANIFEST MANAGER v3.5 CHEATSHEET                         ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 FILE OPERATIONS
@@ -374,7 +374,7 @@ class SafeParser(argparse.ArgumentParser):
         raise ParserControl()
 
 class ManifestShell(cmd.Cmd):
-    intro = "Manifest Manager v3.4. Type 'help' or 'cheatsheet' for commands."
+    intro = "Manifest Manager v3.5. Type 'help' or 'cheatsheet' for commands."
     prompt = "(manifest) "
 
     def __init__(self):
@@ -1290,6 +1290,174 @@ class ManifestShell(cmd.Cmd):
                 result = self.repo.edit_node(args.selector, spec, args.delete)
                 print(result.message)
         
+        self._exec(_run)
+
+    def do_delete(self, arg):
+        """Delete node(s): delete <id_or_xpath>
+
+        Aliases: del, remove
+
+        Deletes the matched node and all its descendants.
+        Removes corresponding entries from sidecar if enabled.
+
+        Smart detection (same as edit):
+            - Hex-like string → ID prefix match
+            - XPath syntax   → XPath query
+            - --id / --xpath  to force interpretation
+
+        Examples:
+            delete a3f              # Delete by ID prefix
+            delete a3f7b2c1         # Delete by exact ID
+            delete "//task[@status='cancelled']"  # Delete by XPath
+        """
+        p = SafeParser(prog="delete", description="Delete node(s)")
+        p.add_argument("selector", help="Element ID/prefix or XPath")
+        p.add_argument("--xpath", dest="force_xpath", action="store_true",
+                       help="Force XPath interpretation")
+        p.add_argument("--id", dest="force_id", action="store_true",
+                       help="Force ID interpretation")
+
+        def _run():
+            args = p.parse_args(shlex.split(arg))
+
+            # Re-use edit's ID/XPath resolution
+            if args.force_id:
+                is_id = True
+            elif args.force_xpath:
+                is_id = False
+            else:
+                is_id = _is_id_selector(args.selector, self.repo)
+
+            if is_id:
+                # Exact match first
+                if self.repo.id_sidecar and self.repo.id_sidecar.exists(args.selector):
+                    result = self.repo.edit_node_by_id(args.selector, None, delete=True)
+                    print(result.message)
+                else:
+                    matches = self._search_by_id_pattern(self.repo, args.selector)
+                    if not matches:
+                        print(f"Error: No IDs found matching '{args.selector}'")
+                        if self.repo.id_sidecar:
+                            print("Tip: Use 'find <prefix>' to search, or 'rebuild' to sync sidecar")
+                        else:
+                            print("Tip: Load with --autosc to enable ID search")
+                        return
+                    if len(matches) == 1:
+                        elem_id = matches[0].get("id")
+                        print(f"Matched ID: {elem_id}")
+                        result = self.repo.edit_node_by_id(elem_id, None, delete=True)
+                        print(result.message)
+                    else:
+                        print(f"\nMultiple IDs match '{args.selector}':")
+                        for i, elem in enumerate(matches, 1):
+                            elem_id = elem.get("id")
+                            topic = elem.get("topic", "(no topic)")
+                            status = elem.get("status", "")
+                            status_str = f" [{status}]" if status else ""
+                            print(f"  [{i}] {elem_id}{status_str} - {topic}")
+                        try:
+                            choice = input(f"\nSelect [1-{len(matches)}] or 'c' to cancel: ").strip()
+                            if choice.lower() == "c":
+                                print("Cancelled.")
+                                return
+                            idx = int(choice) - 1
+                            if idx < 0 or idx >= len(matches):
+                                print("Invalid selection.")
+                                return
+                            elem_id = matches[idx].get("id")
+                            result = self.repo.edit_node_by_id(elem_id, None, delete=True)
+                            print(result.message)
+                        except (ValueError, KeyboardInterrupt):
+                            print("\nCancelled.")
+            else:
+                result = self.repo.edit_node(args.selector, None, delete=True)
+                print(result.message)
+
+        self._exec(_run)
+
+    # Aliases
+    def do_del(self, arg):
+        """Alias for delete."""
+        return self.do_delete(arg)
+
+    def do_remove(self, arg):
+        """Alias for delete."""
+        return self.do_delete(arg)
+
+    def do_show(self, arg):
+        """Show a single node in detail: show <id_or_xpath>
+
+        Displays full attributes and text of the matched node,
+        plus a tree view of its children.
+
+        Examples:
+            show a3f              # Show node matching ID prefix
+            show a3f7b2c1         # Show node by exact ID
+            show "//project[1]"   # Show first project
+        """
+        p = SafeParser(prog="show", description="Show node details")
+        p.add_argument("selector", help="Element ID/prefix or XPath")
+        p.add_argument("--xpath", dest="force_xpath", action="store_true")
+        p.add_argument("--id", dest="force_id", action="store_true")
+
+        def _run():
+            args = p.parse_args(shlex.split(arg))
+
+            xpath, error = self._resolve_selector_to_xpath(
+                args.selector,
+                force_id=args.force_id,
+                force_xpath=args.force_xpath,
+            )
+            if error:
+                print(f"Error: {error}")
+                return
+
+            elements = self.repo.search(xpath)
+            if not elements:
+                print(f"No elements found matching: {args.selector}")
+                return
+
+            elem = elements[0]
+            print()
+            print(f"  Tag:    {elem.tag}")
+            for attr, val in elem.attrib.items():
+                print(f"  {attr+':':<10} {val}")
+            if elem.text and elem.text.strip():
+                print(f"  text:      {elem.text.strip()}")
+            if len(elem):
+                print(f"\n  Children ({len(elem)}):")
+                print(ManifestView.render([elem], "tree", max_depth=2))
+
+        self._exec(_run)
+
+    def do_restore(self, arg):
+        """Restore manifest from a backup file: restore <backup_file>
+
+        Loads the backup file into memory and marks the session as modified.
+        Use 'save' (with your original filename) to persist the restoration.
+
+        Examples:
+            restore project.bkp.xml
+            restore project.20260127_143022.xml
+        """
+        p = SafeParser(prog="restore", description="Restore from backup")
+        p.add_argument("filename", help="Backup file to restore from")
+
+        def _run():
+            args = p.parse_args(shlex.split(arg))
+
+            original_filepath = self.repo.filepath
+
+            def do_load(filepath, password):
+                return self.repo.load(filepath, password)
+
+            result = self._with_password_retry(do_load, args.filename)
+            if result and result.success:
+                self.prompt = f"({os.path.basename(self.repo.filepath)}) "
+                print(f"✓ Restored from {args.filename}")
+                if original_filepath:
+                    print(f"Tip: Use 'save {original_filepath}' to write back to original file.")
+
         self._exec(_run)
 
     def do_cheatsheet(self, _):
