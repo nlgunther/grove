@@ -87,23 +87,23 @@ edit "//task[@title='Review']" --status in_progress
 
 # Move:
 
-  move <src> <dest>     Move node + subtree to a new parent
-      src               ID, ID-prefix, or XPath (must match exactly 1 node)
-      dest              ID, ID-prefix, or XPath of the new parent (must match exactly 1 node)
-
-# 
+```bash
+move <src> <dest>     Move node + subtree to a new parent
+src               ID, ID-prefix, or XPath (must match exactly 1 node)
+dest              ID, ID-prefix, or XPath of the new parent (must match exactly 1 node)
+```
 
 ## EXAMPLES:
 
+```bash
   move a3f7 b1c2                         # Move by ID
   move a3f //archive                     # ID source, XPath destination
   move "//task[@status='done']" //done   # XPath to XPath (1 match required)
+```
 
 ## 📂 File Operations
 
 ### Load
-
-> > > > > > > 
 
 ```bash
 load project.xml
