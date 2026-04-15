@@ -23,6 +23,18 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 
+def today_str() -> str:
+    """Return today's date as ISO 8601 (``"YYYY-MM-DD"``).
+
+    Single source of truth for all last_modified stamping.
+
+    Example::
+
+        today_str()  # "2026-04-15"
+    """
+    return datetime.now().date().isoformat()
+
+
 def parse_date(date_str: Optional[str]) -> Optional[str]:
     """Parse a natural language or formatted date string to ISO 8601.
 

@@ -40,10 +40,22 @@ from enum import Enum
 from contextlib import contextmanager
 from lxml import etree
 from .storage import StorageManager, PasswordRequired
+from .config import Config
+from .id_sidecar import IDSidecar
+from shared.dates import today_str
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger("manifest-core")
+
+# Attributes that are structural/administrative and suppressed in rendered output.
+# Add to this set to hide additional attributes without touching render logic.
+_HIDDEN_ATTRS = {'topic', 'status', 'resp', 'last_modified'}
+
+
+def _stamp(elem) -> None:
+    """Set last_modified on elem to today. Single call site for all write ops."""
+    elem.set('last_modified', today_str())
 
 # --- Constants & Types ---
 class TaskStatus(str, Enum):
@@ -122,7 +134,6 @@ class NodeSpec:
             attrs=attributes or {}
         )
 
-@dataclass
 @dataclass
 class Result:
     """Standardized return type for all operations."""
@@ -287,9 +298,6 @@ class ManifestRepository:
             self.filepath, self.password, self.modified = path, password, True
             
             # NEW: Initialize config and sidecar for new files too (v3.3)
-            from .config import Config
-            from .id_sidecar import IDSidecar
-            
             self.config = Config(self.filepath)
             
             if self.config.get('sidecar.enabled', True):
@@ -308,9 +316,6 @@ class ManifestRepository:
             self.filepath, self.password, self.modified = path, password, False
             
             # NEW: Load config and sidecar (v3.3)
-            from .config import Config
-            from .id_sidecar import IDSidecar
-            
             self.config = Config(self.filepath)
             
             if self.config.get('sidecar.enabled', True):
@@ -478,10 +483,10 @@ class ManifestRepository:
             for p in parents:
                 n = etree.SubElement(p, spec.tag, **attrs)
                 if spec.text: n.text = Validator.sanitize(spec.text)
+                _stamp(n)
                 
                 # NEW: Update sidecar with new ID (v3.3)
                 if self.id_sidecar and 'id' in attrs:
-                    from .id_sidecar import IDSidecar
                     xpath = IDSidecar._build_xpath(n)
                     self.id_sidecar.add(attrs['id'], xpath)
             
@@ -510,6 +515,7 @@ class ManifestRepository:
             for n in nodes:
                 if spec.text is not None: n.text = Validator.sanitize(spec.text)
                 for k, v in spec.to_xml_attrs().items(): n.set(k, v)
+                _stamp(n)
             self.modified = True
             return Result.ok(f"Updated {len(nodes)} nodes.")
 
@@ -616,7 +622,6 @@ class ManifestRepository:
 
             # Refresh sidecar entries for the moved subtree.
             if self.id_sidecar:
-                from .id_sidecar import IDSidecar
                 for elem in src_elem.iter():
                     elem_id = elem.get("id")
                     if elem_id:
@@ -703,24 +708,27 @@ class ManifestRepository:
 class ManifestView:
     """Stateless rendering engine."""
     @staticmethod
-    def render(nodes, style="tree", max_depth: int = None) -> str:
+    def render(nodes, style="tree", max_depth: int = None, hide_attrs: bool = True) -> str:
         """Render nodes with optional depth limiting.
         
         Args:
             nodes: List of XML elements to render
             style: "tree" or "table" rendering style
             max_depth: Maximum depth to traverse (None = unlimited)
+            hide_attrs: If True, suppress _HIDDEN_ATTRS in output (default).
+                        Pass False (via 'verbose' command) to show all attributes.
             
         Returns:
             Formatted string representation
         """
         if not nodes: return "No data."
         if style == "table": return ManifestView._table(nodes, max_depth)
-        return ManifestView._tree(nodes, max_depth)
+        return ManifestView._tree(nodes, max_depth, hide_attrs)
 
     @staticmethod
-    def _tree(nodes, max_depth: int = None) -> str:
+    def _tree(nodes, max_depth: int = None, hide_attrs: bool = True) -> str:
         """Tree-style rendering with depth control."""
+        ignore = _HIDDEN_ATTRS if hide_attrs else set()
         lines = []
         def _recurse(node, level, is_root_item, current_depth=0):
             # Check depth limit
@@ -755,7 +763,6 @@ class ManifestView:
             content = f"**{topic}**" if topic else f"<{tag}>"
             if text: content += f": {text}"
             
-            ignore = {'topic', 'status', 'resp'}
             attrs = [f"{k}={v}" for k,v in node.attrib.items() if k not in ignore]
             if attrs: content += f" [{' '.join(attrs)}]"
 

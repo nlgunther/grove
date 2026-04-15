@@ -222,6 +222,9 @@ SEARCHING & VIEWING
       --overwrite       Replace ALL existing IDs
 
   rebuild               Rebuild ID sidecar from current XML (v3.4 NEW!)
+
+  verbose               Toggle display of hidden attributes in list/find output
+                        (topic, status, resp, last_modified hidden by default)
                         Use when IDs exist but sidecar is out of sync
 
 STRUCTURE
@@ -381,6 +384,7 @@ class ManifestShell(cmd.Cmd):
         super().__init__()
         self.repo = ManifestRepository()
         self._confirm_exit = False
+        self._verbose_attrs = False  # When True, all attributes shown in list/find output
         try:
             from .dataframe_commands import add_dataframe_commands
             add_dataframe_commands(self)
@@ -791,7 +795,8 @@ class ManifestShell(cmd.Cmd):
                         print("\n" + "─" * 60)
                     print(f"Match {i}: {self._build_xpath(elem)}")
                     print("─" * 60)
-                    print(ManifestView.render([elem], "tree", max_depth=args.depth))
+                    print(ManifestView.render([elem], "tree", max_depth=args.depth,
+                                              hide_attrs=not self._verbose_attrs))
             else:
                 # Flat view - show IDs prominently (v3.3)
                 for elem in matches:
@@ -1081,7 +1086,8 @@ class ManifestShell(cmd.Cmd):
             print(ManifestView.render(
                 elements, 
                 args.style, 
-                max_depth=args.depth
+                max_depth=args.depth,
+                hide_attrs=not self._verbose_attrs,
             ))
         
         self._exec(_run)
@@ -1584,6 +1590,21 @@ class ManifestShell(cmd.Cmd):
             print(result)
 
         self._exec(_run)
+
+    def do_verbose(self, _):
+        """Toggle display of hidden attributes (topic, status, resp, last_modified).
+
+        By default these attributes are suppressed in list/find output since
+        they appear in the formatted line already. Turn verbose on to see the
+        raw attribute values, e.g. when auditing last_modified dates.
+
+        Examples:
+            verbose        # toggle on  → "Verbose attrs: ON"
+            verbose        # toggle off → "Verbose attrs: OFF"
+        """
+        self._verbose_attrs = not self._verbose_attrs
+        state = "ON" if self._verbose_attrs else "OFF"
+        print(f"Verbose attrs: {state}")
 
     def do_cheatsheet(self, _):
         """Display comprehensive command reference."""

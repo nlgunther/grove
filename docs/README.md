@@ -138,7 +138,7 @@ grove/
 │   │   ├── __init__.py
 │   │   ├── id_generator.py         # Unified ID generation
 │   │   ├── locking.py              # File locking
-│   │   ├── dates.py                # Natural language date parsing
+│   │   ├── dates.py                # Date parsing + today_str()
 │   │   ├── status_map.py           # Bidirectional status conversion
 │   │   ├── integration_config.py   # config/integration.yaml loader
 │   │   ├── manifest_bridge.py      # Node → Task conversion + push
@@ -201,16 +201,37 @@ where = ["src"]
 
 ### Date Parsing
 
-Both tools accept natural language dates via `shared.dates.parse_date`. The `--due` flag in both shells resolves through this function.
+Both tools accept natural language dates via `shared.dates.parse_date`. The `--due` flag in both shells resolves through this function. `shared.dates.today_str` is the single source of truth for all internal date stamping.
 
 ```python
-from shared.dates import parse_date
+from shared.dates import parse_date, today_str
 
 parse_date("tomorrow")   # "2026-04-15"
 parse_date("+3")         # "2026-04-17"
 parse_date("monday")     # next Monday as ISO date
 parse_date("2026-06-15") # "2026-06-15" (passthrough)
+today_str()              # "2026-04-15" (used for last_modified)
 ```
+
+### Automatic `last_modified` Tracking
+
+Every node created or edited via `add_node`, `edit_node`, or `edit_node_by_id` is automatically stamped with a `last_modified="YYYY-MM-DD"` attribute. The attribute lives in the XML itself, so it survives sidecar rebuilds and is fully queryable via XPath.
+
+Nodes that predate this feature simply lack the attribute. Find them with:
+
+```bash
+search /manifest//*[not(@last_modified)]
+```
+
+To see `last_modified` values in `list` output, use the `verbose` toggle:
+
+```bash
+verbose        # ON — shows all attributes including last_modified
+list
+verbose        # OFF — back to normal
+```
+
+`show <id>` always displays all attributes regardless of the verbose setting.
 
 ### Status Mapping
 
@@ -275,7 +296,7 @@ writer.write("tasks.ics")
 ## Testing
 
 ```bash
-pytest                              # all 331 tests
+pytest                              # all tests
 pytest tests/shared/ -v
 pytest tests/smart_scheduler/ -v   # parameterized: json + sqlite
 pytest tests/integration/ -v
@@ -287,11 +308,11 @@ pytest --cov=manifest_manager --cov=smart_scheduler --cov=shared
 
 | Suite | Tests |
 |---|---|
-| Manifest Manager | 172 |
+| Manifest Manager | 186 |
 | Smart Scheduler | 57 |
 | Shared library | 12 |
 | Integration | 59 |
-| **Total** | **331** |
+| **Total** | **345** |
 
 ---
 
@@ -307,7 +328,7 @@ Same fix. `shared` is under `src/` and requires the editable install.
 Set `paths.scheduler_data_dir` in `config/integration.yaml`, or set `SCHEDULER_DATA_DIR` environment variable.
 
 **Manifest sidecar out of sync after manual XML edit**  
-Run `rebuild` inside the manifest shell.
+Run `rebuild` inside the manifest shell. Note: `last_modified` attributes in the XML are unaffected by rebuild — only the ID→XPath index is reconstructed.
 
 **Scheduler data not found after moving to Google Drive**  
 Use `config location <new_path>` inside the scheduler shell, or update `config/integration.yaml`.
