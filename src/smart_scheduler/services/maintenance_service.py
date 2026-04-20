@@ -17,8 +17,11 @@ class MaintenanceService:
     def backup(self, backup_name: str = None, compress: bool = False) -> Path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         name = backup_name or f"schedule_{timestamp}.bkp"
-        
-        target_path = Path(name).resolve()
+
+        p = Path(name)
+        # Resolve relative names against data_dir so backups don't scatter
+        # to cwd. Absolute paths (e.g. from tests) are used as-is.
+        target_path = p if p.is_absolute() else (self.data_dir.parent / p)
         
         if compress:
             if not str(target_path).endswith(".zip"):

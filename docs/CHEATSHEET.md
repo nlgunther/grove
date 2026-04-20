@@ -29,9 +29,10 @@ save                            # Overwrite current file
 save backup.xml                 # Save to new file
 save backup.7z                  # Save encrypted (prompts password)
 
-backup                          # → project.bkp.xml
+backup                          # → project.bkp.xml  (+ .ids and .config.yaml)
 backup --timestamp              # → project.20260301_143022.xml
 backup mybackup.xml
+                                # config copy is always attempted; warns if absent
 
 restore project.bkp.xml         # Load backup; use save to write back
 ```
@@ -100,6 +101,10 @@ list "//task[@status='active']"
 
 find a3f                        # by ID prefix (requires sidecar)
 find a3f --tree --depth 2
+
+grep tax                        # search tags, attributes, text (3 passes)
+grep "New York"                 # quotes for multi-word terms
+grep todo --ignore-case         # -i short form also works
 
 show a3f7                       # always shows all attributes
 show "//project[1]"
@@ -301,7 +306,10 @@ import-manifest myproject.xml --project q1-work --xpath "//task[@due][@status='a
 ## Backup & Config
 
 ```bash
-backup / backup --name snap / backup --compress
+backup                          # directory backup (+ config.yaml copy)
+backup --name snap              # named backup
+backup --compress               # .zip backup (+ snap.zip.config.yaml copy)
+restore /path/to/backup         # config copy is ignored on restore
 restore /path/to/backup.zip
 
 config

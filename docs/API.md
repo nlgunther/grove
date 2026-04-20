@@ -61,6 +61,15 @@ Encrypts when filename ends in `.7z`.
 backup [filename] [--timestamp] [--force] [--no-sidecar]
 ```
 
+Creates a backup of the current manifest. Also copies the global config file (`%APPDATA%\manifest\config.yaml` on Windows) alongside the backup as `<backup>.config.yaml`. If the config file is not found a warning is printed and the backup continues. The sidecar (`.ids`) is also copied unless `--no-sidecar` is passed.
+
+| Option | Description |
+|---|---|
+| `filename` | Custom backup path (default: `<file>.bkp.xml`) |
+| `--timestamp` | Use datestamp instead of `.bkp` |
+| `--force` | Overwrite without prompting |
+| `--no-sidecar` | Skip sidecar backup (config is still copied) |
+
 ---
 
 ### `restore`
@@ -174,6 +183,30 @@ list [selector] [--style tree|table] [--depth N] [--id] [--xpath]
 ```
 
 Output respects the current `verbose` setting.
+
+---
+
+### `grep`
+
+```
+grep <term> [--ignore-case]
+```
+
+Searches the loaded manifest in three passes, printing results for each:
+
+| Pass | What is searched | XPath equivalent |
+|---|---|---|
+| Tag names | Element tag equals term (exact) | `//*[local-name()='<term>']` |
+| Attributes | Any attribute value contains term | `//*[@*[contains(.,'\<term>')]]` |
+| Text | Element text content contains term | `//*[contains(text(),'\<term>')]` |
+
+Each section prints a match count and a tree view of hits, or `(none)` if empty. Search is case-sensitive by default.
+
+```bash
+grep tax
+grep "New York"          # quotes required for multi-word terms
+grep todo --ignore-case  # -i short form also accepted
+```
 
 ---
 
@@ -460,8 +493,10 @@ import-manifest projects.xml --project q1-work --xpath "//task[@due][@status='ac
 ### `backup`
 
 ```
-backup [--name <n>] [--compress]
+backup [--name <n>] [--compress] [--writable]
 ```
+
+Backs up all scheduler data. Also copies the global manifest config (`%APPDATA%\manifest\config.yaml`) alongside the backup — as `config.yaml` inside a directory backup, or `<name>.config.yaml` next to a compressed one. Prints a warning if the config file is not found; backup continues either way. The config copy is informational and is not restored by the `restore` command — install it manually if needed.
 
 ---
 
@@ -470,6 +505,8 @@ backup [--name <n>] [--compress]
 ```
 restore <path>
 ```
+
+Restores scheduler data from a backup directory or `.zip`. The global config copy (if present) is ignored — restore only touches the scheduler data directory.
 
 ---
 

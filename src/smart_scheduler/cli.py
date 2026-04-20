@@ -1055,14 +1055,34 @@ def cmd_backup(cli, args):
     """Create a backup of all data (read-only by default)."""
     import os
     import stat
-    
+    import shutil
+    from manifest_manager.config import Config as ManifestConfig
+
     pos, opts = cli._opts(args)
     name = opts.get("name") or opts.get("bkup_name")
     compress = "compress" in opts
     allow_write = "writable" in opts  # Optional flag to keep writable
     
     path = cli.maint_service.backup(name, compress)
-    
+
+    # Copy global manifest config alongside the backup.
+    # Restore ignores this file intentionally — it requires human review to install.
+    global_config_path = Path(ManifestConfig._get_global_path())
+    if global_config_path.exists():
+        try:
+            if path.is_dir():
+                # Directory backup: place config inside it
+                dest = path / "config.yaml"
+            else:
+                # Compressed backup: place config alongside as <backup>.config.yaml
+                dest = path.parent / (path.name + ".config.yaml")
+            shutil.copy2(global_config_path, dest)
+            print(f"✓ Config backed up to {dest}")
+        except Exception as e:
+            print(f"⚠ Warning: Could not back up config: {e}")
+    else:
+        print(f"⚠ Warning: Global config not found at {global_config_path} — skipping")
+
     if not allow_write:
         # Make backup read-only
         if path.is_file():

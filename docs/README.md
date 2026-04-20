@@ -107,6 +107,8 @@ manifest
 (myproject.xml) add task "Deploy" --due tomorrow --status active
 (myproject.xml) find a3f
 (myproject.xml) edit a3f7 --status done
+(myproject.xml) grep tax                    # search tags, attrs, text
+(myproject.xml) grep "New York" --ignore-case
 (myproject.xml) save
 ```
 
@@ -330,6 +332,12 @@ pytest --cov=manifest_manager --cov=smart_scheduler --cov=shared
 ---
 
 ## Troubleshooting
+
+**Scheduler backup reports "Global config not found" warning**  
+Same cause as the manifest backup warning — create `%APPDATA%\manifest\config.yaml`. The scheduler backup still completes without it.
+
+**Backup reports "Global config not found" warning**  
+The global config file (`%APPDATA%\manifest\config.yaml`) doesn't exist yet. Create it with at least an empty `aliases: {}` entry. The backup still completes — this is a warning, not an error.
 
 **`load basic` creates `basic.xml` instead of loading the real file**  
 The global config file doesn't exist or doesn't have an `aliases` key. Create `%APPDATA%\manifest\config.yaml` (Windows) or `~/.config/manifest/config.yaml` (macOS/Linux) with an `aliases` section. See Configuration above.

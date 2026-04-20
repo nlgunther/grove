@@ -46,6 +46,7 @@ import shlex
 import argparse
 import getpass
 import os
+import shutil
 
 # --- Imports ---
 try:
@@ -213,6 +214,9 @@ SEARCHING & VIEWING
   find <prefix>         Find by ID prefix (fast sidecar lookup)
       --tree            Show full subtrees for matches
       --depth N         Limit tree depth
+
+  grep <term>           Search tag names, attributes, and text (three passes)
+      --ignore-case     Case-insensitive search
 
   list [xpath]          Display nodes (default: /* = all top-level)
       --style tree      Hierarchical view (default)
@@ -632,6 +636,18 @@ class ManifestShell(cmd.Cmd):
                 if self.repo.id_sidecar and not args.no_sidecar:
                     if backup_sidecar(original_filepath, backup_path):
                         print(f"✓ Sidecar backed up to {backup_path}.ids")
+
+                # 7. Backup global config if it exists
+                global_config_path = Config._get_global_path()
+                if os.path.exists(global_config_path):
+                    config_backup_path = backup_path + ".config.yaml"
+                    try:
+                        shutil.copy2(global_config_path, config_backup_path)
+                        print(f"✓ Config backed up to {config_backup_path}")
+                    except Exception as e:
+                        print(f"⚠ Warning: Could not back up config: {e}")
+                else:
+                    print(f"⚠ Warning: Global config not found at {global_config_path} — skipping")
             finally:
                 # 7. Restore original filepath (save() changes it)
                 # This ALWAYS runs, even if save() fails or we return early
@@ -1103,6 +1119,78 @@ class ManifestShell(cmd.Cmd):
                 hide_attrs=not self._verbose_attrs,
             ))
         
+        self._exec(_run)
+
+    def do_grep(self, arg):
+        """Search the manifest for a term across tag names, attributes, and text.
+
+        Runs three passes in order and reports matches at each stage:
+            1. Tag names   — elements whose tag equals the term
+            2. Attributes  — elements with any attribute value containing the term
+            3. Text        — elements whose text content contains the term
+
+        Usage:
+            grep <term>
+            grep <term> --ignore-case
+
+        Examples:
+            grep tax
+            grep "New York"
+            grep todo --ignore-case
+        """
+        p = SafeParser(prog="grep")
+        p.add_argument("term", help="Search term")
+        p.add_argument("--ignore-case", "-i", action="store_true",
+                       help="Case-insensitive search")
+
+        def _run():
+            args = p.parse_args(shlex.split(arg))
+
+            if not self.repo.tree:
+                print("Error: No file loaded.")
+                return
+
+            term = args.term
+            # For case-insensitive XPath we lower-case both sides via translate().
+            _UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            _LOWER = "abcdefghijklmnopqrstuvwxyz"
+
+            def ci(xpath_expr: str) -> str:
+                """Wrap an XPath string expression in translate() for case-insensitive match."""
+                return f"translate({xpath_expr},'{_UPPER}','{_LOWER}')"
+
+            if args.ignore_case:
+                t = term.lower()
+                tag_xpath   = f"//*[translate(local-name(),'{_UPPER}','{_LOWER}')='{t}']"
+                attr_xpath  = f"//*[@*[contains({ci('.')},'{t}')]]"
+                text_xpath  = f"//*[contains({ci('text()')},'{t}')]"
+            else:
+                tag_xpath   = f"//*[local-name()='{term}']"
+                attr_xpath  = f"//*[@*[contains(.,'{term}')]]"
+                text_xpath  = f"//*[contains(text(),'{term}')]"
+
+            sections = [
+                ("Tag names",  tag_xpath),
+                ("Attributes", attr_xpath),
+                ("Text",       text_xpath),
+            ]
+
+            any_found = False
+            for label, xpath in sections:
+                matches = self.repo.search(xpath)
+                print(f"\n── {label} ({'1 match' if len(matches)==1 else f'{len(matches)} matches'}) ──")
+                if matches:
+                    any_found = True
+                    print(ManifestView.render(
+                        matches, "tree",
+                        hide_attrs=not self._verbose_attrs,
+                    ))
+                else:
+                    print("  (none)")
+
+            if not any_found:
+                print(f"\nNo matches for '{term}'.")
+
         self._exec(_run)
 
     def do_export_calendar(self, arg):
