@@ -39,8 +39,6 @@ load <filename> [--autosc] [--rebuildsc]
 ```bash
 load myproject.xml --autosc
 load backup.7z              # prompts for password
-load basic                  # expands alias defined in global config
-load basic --autosc         # alias expansion + sidecar
 ```
 
 ---
@@ -94,8 +92,6 @@ add --tag <n> [options]                  # full syntax
 
 `--due` accepts all formats understood by `shared.dates.parse_date`: `today`, `tomorrow`, `+N`, weekday names, ISO, and US format.
 
-Every new node is automatically stamped with a `last_modified` attribute set to the current date (`YYYY-MM-DD`). This attribute is managed by the repository layer and cannot be set via `--attr`.
-
 ```bash
 add task "Review PR"
 add task "Deploy" --status active --resp alice --due tomorrow
@@ -122,8 +118,6 @@ edit <selector> [options]
 | `-a <key=value>` | Add / update attribute |
 | `--delete` | Delete matched node(s) |
 | `--id` / `--xpath` | Force interpretation |
-
-`last_modified` is automatically updated to today's date on every successful edit.
 
 ---
 
@@ -153,8 +147,6 @@ Both selectors accept ID prefix or XPath; each must match exactly one node.
 show <selector> [--id] [--xpath]
 ```
 
-Displays all attributes including `last_modified`, regardless of the `verbose` setting.
-
 ---
 
 ### `find`
@@ -163,7 +155,7 @@ Displays all attributes including `last_modified`, regardless of the `verbose` s
 find <prefix> [--tree] [--depth N]
 ```
 
-Requires sidecar index (load with `--autosc`). Tree output respects the current `verbose` setting.
+Requires sidecar index (load with `--autosc`).
 
 ---
 
@@ -171,31 +163,6 @@ Requires sidecar index (load with `--autosc`). Tree output respects the current 
 
 ```
 list [selector] [--style tree|table] [--depth N] [--id] [--xpath]
-```
-
-Output respects the current `verbose` setting.
-
----
-
-### `verbose`
-
-```
-verbose
-```
-
-Toggles display of hidden attributes (`topic`, `status`, `resp`, `last_modified`) in `list` and `find --tree` output. These attributes are suppressed by default because they already appear in the formatted line. Toggle on to audit raw attribute values such as `last_modified` dates.
-
-```bash
-verbose        # → "Verbose attrs: ON"
-verbose        # → "Verbose attrs: OFF"
-```
-
-The toggle is session-only and resets to OFF on next `manifest` invocation. To inspect timestamps on specific nodes without toggling, use `show <id>` which always displays all attributes, or use `search`:
-
-```bash
-search //*[@last_modified='2026-04-15']
-search //*[not(@last_modified)]        # nodes not yet touched since upgrade
-search /manifest//*[not(@last_modified)]  # same, excluding the root element
 ```
 
 ---
@@ -337,7 +304,22 @@ Start with `scheduler` to enter the interactive shell.
 list
 list --all [--show-done]
 list projects
-list tasks [<project_slug>]
+list tasks [<project_slug>] [--upcoming]
+```
+
+| Flag | Description |
+|---|---|
+| `--all` | Detailed hierarchical view |
+| `--show-done` | Include completed/cancelled tasks |
+| `--upcoming` | Active tasks with no due date or a due date of today or later. Excludes done, cancelled, and overdue tasks. Results sorted by due date ascending, undated tasks last. |
+
+```bash
+list                        # project summary
+list --all                  # all tasks, hides completed
+list --all --show-done      # everything
+list tasks work             # tasks in 'work' project
+list tasks --upcoming       # active + future tasks across all projects
+list tasks work --upcoming  # same, scoped to 'work'
 ```
 
 ---
@@ -567,16 +549,6 @@ Config is cached per-process; restart the shell after editing.
 
 ### `shared.dates`
 
-#### `today_str()`
-
-```python
-from shared.dates import today_str
-
-today_str()   # "2026-04-15"
-```
-
-Single source of truth for `last_modified` stamping. Returns today's date as an ISO 8601 string.
-
 #### `parse_date(date_str)`
 
 ```python
@@ -670,24 +642,16 @@ content = writer.to_string()
 |---|---|
 | `load(filepath, password, auto_sidecar, rebuild_sidecar)` | Load XML or 7z |
 | `save(filepath, password)` | Save XML or 7z |
-| `add_node(parent_xpath, spec, auto_id=True)` | Add a node; stamps `last_modified` automatically |
-| `edit_node(xpath, spec, delete=False)` | Edit/delete by XPath; stamps `last_modified` on edit |
-| `edit_node_by_id(elem_id, spec, delete=False)` | Edit/delete by ID; stamps `last_modified` on edit |
+| `add_node(parent_xpath, spec, auto_id=True)` | Add a node |
+| `edit_node(xpath, spec, delete=False)` | Edit/delete by XPath |
+| `edit_node_by_id(elem_id, spec, delete=False)` | Edit/delete by ID |
 | `ensure_ids(overwrite=False)` | Assign IDs to nodes missing one |
 | `search(xpath)` | Return list of matching elements |
 | `search_by_id_prefix(prefix)` | Return elements matching ID prefix |
 | `wrap_content(new_root_tag)` | Wrap top-level nodes |
 | `merge_from(path, password)` | Merge another manifest |
 
-All mutating methods return a `Result(success, message, data)`.
-
-### `ManifestView`
-
-```python
-ManifestView.render(nodes, style="tree", max_depth=None, hide_attrs=True)
-```
-
-`hide_attrs=True` (default) suppresses `topic`, `status`, `resp`, and `last_modified` from the inline attrs bracket. Pass `hide_attrs=False` to show all attributes — equivalent to the `verbose` shell command.
+All methods return a `Result(success, message, data)`.
 
 ### `NodeSpec`
 
@@ -701,8 +665,6 @@ spec = NodeSpec(
 )
 spec = NodeSpec.from_args(args, attributes=extra_attrs)
 ```
-
-`last_modified` is not a `NodeSpec` field. It is set unconditionally by the repository layer on every create and edit operation.
 
 ### `TaskService`
 
@@ -767,25 +729,6 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 ```
-
-### Global config — `%APPDATA%\manifest\config.yaml` (Windows) / `~/.config/manifest/config.yaml` (macOS/Linux)
-
-```yaml
-# Short names for long paths — used by the load command
-aliases:
-  basic: "g:/my drive/manifests/todo2026"
-  work:  "g:/my drive/manifests/work2026"
-  vt:    "g:/my drive/manifests/greensboro"
-
-# Auto-load a file on every manifest launch
-startup:
-  default_file: "g:/my drive/manifests/todo2026"
-  autosc: true
-```
-
-`aliases` keys are exact-match only — `load bas` does not expand `basic`. All normal flags (`--autosc`, `--rebuildsc`) apply after expansion.
-
----
 
 ### `config/shortcuts.yaml`
 
