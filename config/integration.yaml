@@ -129,3 +129,6 @@ import_manifest:
 
   # Same back-reference behaviour as export_scheduler above.
   store_manifest_id: true
+
+named_files:
+  basic: "G:/My Drive/manifests/todo2026.xml"

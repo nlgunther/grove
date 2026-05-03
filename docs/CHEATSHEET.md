@@ -19,6 +19,8 @@ scheduler      # Smart Scheduler interactive shell
 
 ```bash
 load myproject.xml              # Load (creates if missing)
+load basic                      # Load by alias (defined in integration.yaml)
+load basic --autosc             # Load alias + create sidecar
 load myproject.xml --autosc     # Load + create sidecar if missing
 load myproject.xml --rebuildsc  # Load + force-rebuild sidecar
 load backup.7z                  # Load encrypted (prompts password)
@@ -324,12 +326,18 @@ with file_lock(Path("data.json"), timeout=5):
 paths:
   scheduler_data_dir: "G:/My Drive/schedulers"
 
+named_files:
+  basic: "G:/My Drive/manifests/todo2026.xml"
+  work:  "G:/My Drive/manifests/work.xml"
+
 status_mapping:
   to_scheduler:
     active:  in_progress   # uncomment to enable
     pending: todo
     blocked: waiting
 ```
+
+`named_files` entries can be used anywhere the manifest `load` command accepts a filename. Add as many as you like — names are case-sensitive.
 
 Changes take effect on next shell start (config is cached per-process).
 

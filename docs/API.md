@@ -31,6 +31,8 @@ Start with `manifest` to enter the interactive shell, then `load <file>`.
 load <filename> [--autosc] [--rebuildsc]
 ```
 
+`filename` may be a literal path or a named alias defined in `config/integration.yaml` under `named_files`. When an alias is matched, the resolved path is printed before loading.
+
 | Option | Description |
 |---|---|
 | `--autosc` | Auto-create ID sidecar if missing |
@@ -38,6 +40,8 @@ load <filename> [--autosc] [--rebuildsc]
 
 ```bash
 load myproject.xml --autosc
+load basic                  # resolves via named_files in integration.yaml
+load basic --autosc
 load backup.7z              # prompts for password
 ```
 
@@ -758,6 +762,33 @@ reserved_keywords:
 ### `config/integration.yaml`
 
 See [Cross-Tool Integration](#cross-tool-integration) above for full reference.
+
+```yaml
+paths:
+  scheduler_data_dir: "G:/My Drive/schedulers"
+
+named_files:
+  basic: "G:/My Drive/manifests/todo2026.xml"
+  work:  "G:/My Drive/manifests/work.xml"
+
+status_mapping:
+  to_scheduler:
+    active:    in_progress
+    pending:   todo
+    blocked:   waiting
+  to_manifest:
+    in_progress: active
+
+export_scheduler:
+  default_xpath: ""
+  on_missing_due: skip
+  store_manifest_id: true
+
+import_manifest:
+  default_xpath: ""
+  on_missing_due: skip
+  store_manifest_id: true
+```
 
 ### Scheduler config — `~/.scheduler/config.json`
 

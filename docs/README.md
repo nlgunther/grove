@@ -72,6 +72,9 @@ paths:
   scheduler_data_dir: "G:/My Drive/schedulers"
   # manifest_default_dir: "G:/My Drive/manifests"
 
+named_files:
+  basic: "G:/My Drive/manifests/todo2026.xml"
+
 status_mapping:
   to_scheduler:
     # active:  in_progress

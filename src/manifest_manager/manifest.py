@@ -51,7 +51,6 @@ import os
 try:
     from .manifest_core import ManifestRepository, NodeSpec, ManifestView, Validator
     from .storage import PasswordRequired
-    from .config import Config
 except ImportError as e:
     print(f"Critical Error: Missing core modules. {e}")
     sys.exit(1)
@@ -223,9 +222,6 @@ SEARCHING & VIEWING
       --overwrite       Replace ALL existing IDs
 
   rebuild               Rebuild ID sidecar from current XML (v3.4 NEW!)
-
-  verbose               Toggle display of hidden attributes in list/find output
-                        (topic, status, resp, last_modified hidden by default)
                         Use when IDs exist but sidecar is out of sync
 
 STRUCTURE
@@ -385,20 +381,11 @@ class ManifestShell(cmd.Cmd):
         super().__init__()
         self.repo = ManifestRepository()
         self._confirm_exit = False
-        self._verbose_attrs = False  # When True, all attributes shown in list/find output
         try:
             from .dataframe_commands import add_dataframe_commands
             add_dataframe_commands(self)
         except ImportError:
             pass  # DataFrame support optional
-
-        # Auto-load default file from global config, if set.
-        cfg = Config()
-        default_file = cfg.get('startup.default_file')
-        if default_file:
-            autosc = cfg.get('startup.autosc', False)
-            cmd = f'load "{default_file}"' + (' --autosc' if autosc else '')
-            self.onecmd(cmd)
 
     def _exec(self, func):
         """Safe execution wrapper."""
@@ -515,10 +502,16 @@ class ManifestShell(cmd.Cmd):
         
         def _run():
             args = p.parse_args(shlex.split(arg))
-
-            # Expand alias if the filename matches a key in config aliases.
-            aliases = Config().get('aliases', {})
-            filename = aliases.get(args.filename, args.filename)
+            
+            # Resolve named file aliases from config/integration.yaml
+            # e.g. named_files: {basic: "G:/My Drive/manifests/todo2026.xml"}
+            filename = args.filename
+            from shared.integration_config import load_integration_config
+            named = load_integration_config().get("named_files", {})
+            if filename in named:
+                resolved = named[filename]
+                print(f"Loading '{filename}' → {resolved}")
+                filename = resolved
 
             def on_success(result):
                 self.prompt = f"({os.path.basename(self.repo.filepath)}) "
@@ -728,11 +721,6 @@ class ManifestShell(cmd.Cmd):
                     attrs['id'] = args.node_id  # Custom ID
                     auto_id = False  # Don't auto-generate if custom provided
             
-            # Resolve natural language --due (e.g. "tomorrow", "+3", "monday")
-            if args.due:
-                from shared.dates import parse_date as _parse_date
-                args.due = _parse_date(args.due) or args.due
-
             # Use factory method (v3.4)
             spec = NodeSpec.from_args(args, attributes=attrs)
             result = self.repo.add_node(parent_xpath, spec, auto_id=auto_id)
@@ -808,8 +796,7 @@ class ManifestShell(cmd.Cmd):
                         print("\n" + "─" * 60)
                     print(f"Match {i}: {self._build_xpath(elem)}")
                     print("─" * 60)
-                    print(ManifestView.render([elem], "tree", max_depth=args.depth,
-                                              hide_attrs=not self._verbose_attrs))
+                    print(ManifestView.render([elem], "tree", max_depth=args.depth))
             else:
                 # Flat view - show IDs prominently (v3.3)
                 for elem in matches:
@@ -1099,8 +1086,7 @@ class ManifestShell(cmd.Cmd):
             print(ManifestView.render(
                 elements, 
                 args.style, 
-                max_depth=args.depth,
-                hide_attrs=not self._verbose_attrs,
+                max_depth=args.depth
             ))
         
         self._exec(_run)
@@ -1512,112 +1498,6 @@ class ManifestShell(cmd.Cmd):
                     print(f"Tip: Use 'save {original_filepath}' to write back to original file.")
 
         self._exec(_run)
-
-    def do_export_scheduler(self, arg):
-        """Export manifest nodes to Smart Scheduler as tasks.
-
-        Usage:
-            export-scheduler [xpath] --project <slug> [--name <n>] [--engine json|sqlite]
-
-        Arguments:
-            xpath        XPath or ID selector for nodes to export.
-                         Defaults to config/integration.yaml export_scheduler.default_xpath,
-                         or "//task[@due]" if that is also empty.
-
-        Options:
-            --project    Scheduler project slug (required).
-                         Created automatically if it does not exist.
-            --name       Display name for the project (used only when creating).
-                         Defaults to the slug if omitted.
-            --engine     Storage engine: json (default) or sqlite.
-
-        Status conversion is driven by config/integration.yaml.
-        Until you configure status_mapping.to_scheduler, all exported
-        tasks will have status 'todo'.
-
-        Examples:
-            export-scheduler --project q1-work
-            export-scheduler "//task[@due][@status='active']" --project q1-work
-            export-scheduler a3f7 --project q1-work
-        """
-        p = SafeParser(prog="export-scheduler",
-                       description="Export manifest nodes to Smart Scheduler")
-        p.add_argument("selector", nargs="?", default="",
-                       help="XPath or ID prefix (default: from integration.yaml)")
-        p.add_argument("--project", required=True,
-                       help="Scheduler project slug")
-        p.add_argument("--name", default="",
-                       help="Project display name (only used when creating)")
-        p.add_argument("--engine", default="json", choices=["json", "sqlite"],
-                       help="Storage engine (default: json)")
-
-        def _run():
-            args = p.parse_args(shlex.split(arg))
-
-            if not self.repo.tree:
-                print("Error: No manifest loaded. Use 'load <file>' first.")
-                return
-
-            from shared.integration_config import (
-                load_integration_config, get_scheduler_data_dir,
-            )
-            cfg = load_integration_config()
-            export_cfg = cfg.get("export_scheduler", {})
-
-            selector = args.selector.strip()
-            if not selector:
-                selector = export_cfg.get("default_xpath", "") or "//task[@due]"
-
-            xpath, error = self._resolve_selector_to_xpath(selector)
-            if error:
-                print(f"Error: {error}")
-                return
-
-            nodes = self.repo.search(xpath)
-            if not nodes:
-                print(f"No nodes matched: {selector}")
-                return
-            print(f"Found {len(nodes)} node(s) matching '{selector}'.")
-
-            data_dir = get_scheduler_data_dir()
-            if data_dir is None:
-                print(
-                    "Error: Scheduler data directory not configured.\n"
-                    "Set paths.scheduler_data_dir in config/integration.yaml\n"
-                    "or set the SCHEDULER_DATA_DIR environment variable."
-                )
-                return
-
-            from shared.manifest_bridge import build_tasks, push_tasks_to_scheduler
-
-            tasks, skip_reasons = build_tasks(nodes)
-            result = push_tasks_to_scheduler(
-                tasks=tasks,
-                project_slug=args.project,
-                project_name=args.name or args.project,
-                data_dir=data_dir,
-                storage_engine=args.engine,
-            )
-            result.skipped = len(skip_reasons)
-            result.skipped_reasons = skip_reasons
-            print(result)
-
-        self._exec(_run)
-
-    def do_verbose(self, _):
-        """Toggle display of hidden attributes (topic, status, resp, last_modified).
-
-        By default these attributes are suppressed in list/find output since
-        they appear in the formatted line already. Turn verbose on to see the
-        raw attribute values, e.g. when auditing last_modified dates.
-
-        Examples:
-            verbose        # toggle on  → "Verbose attrs: ON"
-            verbose        # toggle off → "Verbose attrs: OFF"
-        """
-        self._verbose_attrs = not self._verbose_attrs
-        state = "ON" if self._verbose_attrs else "OFF"
-        print(f"Verbose attrs: {state}")
 
     def do_cheatsheet(self, _):
         """Display comprehensive command reference."""
