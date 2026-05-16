@@ -99,7 +99,16 @@ find a3f --tree --depth 2
 
 show a3f7
 show "//project[1]"
+
+search vermont                  # substring search across all attrs and text
+search "Green Mountain"         # multi-word (quote in shell)
+search "(?i)vermont" --regexp   # regexp: use (?i) for case-insensitive
+search task --scope //travel    # restrict walk to a subtree
+search inn --expand             # show matched node's children
 ```
+
+`search` is a backstop — it reports which fields matched so you can follow up
+with a precise XPath query.  It has no dependency on the sidecar.
 
 ---
 
@@ -202,7 +211,7 @@ edit "//task[@id='a3f7b2c1']"   # explicit XPath
 
 ---
 
-## View
+## View & Search
 
 ```bash
 list                            # project summary
@@ -214,7 +223,16 @@ list tasks --upcoming           # active tasks: no due date or due date >= today
 list tasks work --upcoming      # same, scoped to one project
 
 show t30b0a / show work
+
+search vermont                  # substring search, all fields, active tasks
+search "Green Mountain" --all   # include done/cancelled
+search water --field notes      # restrict to one field
+search inn --project vermont    # restrict to one project
+search "plumber|electrician" --regexp   # regexp (always case-insensitive)
 ```
+
+`search` is a backstop — it reports which field(s) matched so you can follow
+up with targeted `list` filters.  Search is always case-insensitive.
 
 ---
 

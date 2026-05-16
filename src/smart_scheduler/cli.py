@@ -10,6 +10,7 @@ Features:
 - Comprehensive help
 """
 import sys
+import re
 import shlex
 from pathlib import Path
 from .config import get_config
@@ -1495,6 +1496,15 @@ MAINTENANCE:
   config location <path>    Move data directory
   config reset              Reset to default configuration
 
+SEARCHING:
+  search <term>             Full-text search across all tasks and fields
+  search <term> --all       Include done/cancelled tasks
+  search <term> --field notes|title|tags|outcome|assignee
+                            Restrict to one field
+  search <term> --project <slug>
+                            Restrict to one project
+  search <term> --regexp    Treat term as a regexp (case-insensitive)
+
 UTILITY:
   export <id> <format>      Export to ICS/JSON/CSV
   help [command]            Show this help or command-specific help
@@ -1622,6 +1632,27 @@ Examples:
   add task work "Fix bug" --note "Issue reported by client"
   add contact work "John Doe" --role "Client" --email "john@example.com"
 """,
+            "search": """
+SEARCH - Full-text search across all tasks
+
+Usage:
+  search <term>                         Search all active tasks, all fields
+  search <term> --all                   Include done/cancelled tasks
+  search <term> --field <field>         Restrict to one field
+  search <term> --project <slug>        Restrict to one project
+  search <term> --regexp                Treat term as regexp (IGNORECASE)
+
+Valid fields: title, notes, tags, outcome, assignee
+
+Results are grouped by project. Each match shows which field(s) matched
+and the matched field value (truncated at 120 chars).
+
+Examples:
+  search vermont
+  search "Green Mountain" --all
+  search water --field notes --project home
+  search "plumber|electrician" --regexp
+""",
             "config": """
 CONFIG - View and modify configuration
 
@@ -1731,6 +1762,83 @@ def cmd_import_manifest(cli, args):
     print(result)
 
 
+def cmd_search(cli, args):
+    """Full-text search across all tasks and fields.
+
+    Usage:
+        search <term> [--all] [--field title|notes|tags|outcome|assignee]
+                      [--project <slug>] [--regexp]
+
+    Reports which fields matched so you can follow up with targeted filters.
+    Search is case-insensitive by default.
+    --all includes done/cancelled tasks.
+    --regexp treats <term> as a case-insensitive regular expression.
+
+    Examples:
+        search vermont
+        search "Green Mountain" --all
+        search water --field notes
+        search "plumber|electrician" --regexp
+        search inn --project vermont
+    """
+    pos, opts = cli._opts(args)
+    if not pos:
+        print("Usage: search <term> [--all] [--field title|notes|tags|outcome|assignee]"
+              " [--project <slug>] [--regexp]")
+        return
+
+    term = pos[0]
+    include_inactive = "all" in opts
+    field = opts.get("field")
+    project_slug = opts.get("project")
+    use_regexp = "regexp" in opts
+
+    valid_fields = {"title", "notes", "tags", "outcome", "assignee"}
+    if field and field not in valid_fields:
+        print(f"Unknown field '{field}'. Valid fields: {', '.join(sorted(valid_fields))}")
+        return
+
+    try:
+        results = cli.task_service.search(term, include_inactive, field, project_slug, use_regexp)
+    except re.error as e:
+        print(f"Invalid regexp: {e}")
+        return
+
+    if not results:
+        print(f'No matches for "{term}".')
+        return
+
+    # Group by project slug, preserving order of first appearance.
+    by_project = {}
+    for r in results:
+        by_project.setdefault(r["project_slug"], []).append(r)
+
+    _MAX = 120   # truncate long field values at this many characters
+
+    for slug, group in by_project.items():
+        print(f"\n[{slug}]")
+        for r in group:
+            task = r["task"]
+            fields_str = ", ".join(r["matched_fields"])
+            print(f"  {task.id} {task.status.icon}  {task.title}")
+            print(f"           Matched in: {fields_str}")
+            for f in r["matched_fields"]:
+                if f == "title":
+                    continue   # already shown on the task line
+                elif f == "notes" and task.notes:
+                    val = task.notes.replace("\n", " ")
+                    val = val[:_MAX] + ("…" if len(val) > _MAX else "")
+                    print(f'           Notes: "{val}"')
+                elif f == "outcome" and task.outcome:
+                    val = task.outcome.replace("\n", " ")
+                    val = val[:_MAX] + ("…" if len(val) > _MAX else "")
+                    print(f'           Outcome: "{val}"')
+                elif f == "assignee" and task.assignee:
+                    print(f"           Assignee: {task.assignee}")
+                elif f == "tags" and task.tags:
+                    print(f"           Tags: {', '.join(task.tags)}")
+
+
 _COMMANDS = {
     "list": cmd_list,
     "show": cmd_show,
@@ -1746,6 +1854,7 @@ _COMMANDS = {
     "export-json": cmd_export_json,
     "import-json": cmd_import_json,
     "import-manifest": cmd_import_manifest,
+    "search": cmd_search,
     "config": cmd_config,
     "help": cmd_help,
 }

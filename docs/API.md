@@ -163,6 +163,36 @@ Requires sidecar index (load with `--autosc`).
 
 ---
 
+### `search`
+
+```
+search <term> [--regexp] [--scope <xpath>] [--expand]
+```
+
+Full-tree substring (or regexp) search across every attribute and text node. A backstop command — use it when targeted XPath or ID queries have failed. Reports which fields matched so you can follow up with a precise query. No sidecar required.
+
+| Option | Description |
+|---|---|
+| `term` | Substring to find (required). Quote multi-word terms in the shell. |
+| `--regexp` | Treat `term` as a regular expression. Use `(?i)` inline flag for case-insensitive matching. |
+| `--scope <xpath>` | Restrict walk to a subtree (e.g. `--scope //travel`). Default: full tree. |
+| `--expand` | Show matched node's children in output. Default: matched node only. |
+
+Scoring: each matching attribute scores 2; text content scores 1. Results are printed in descending score order.
+
+```bash
+search vermont
+search "Green Mountain" --expand
+search "(?i)vermont" --regexp
+search task --scope //travel
+```
+
+**Python API**: `ManifestRepository.full_text_search(term, scope_xpath=None, use_regexp=False) -> list[dict]`
+
+Each dict contains: `score`, `breadcrumb`, `elem`, `matched_fields`, `elem_id`, `tag`.
+
+---
+
 ### `list`
 
 ```
@@ -335,6 +365,38 @@ show <task_id>
 show <contact_id>
 show <project_slug>
 ```
+
+---
+
+### `search`
+
+```
+search <term> [--all] [--field <field>] [--project <slug>] [--regexp]
+```
+
+Full-text search across task fields. A backstop command — use it when you can't remember which project or field holds a piece of information. Reports which fields matched so you can follow up with targeted `list` filters. Search is always case-insensitive.
+
+| Option | Description |
+|---|---|
+| `term` | Substring or regexp pattern to find (required). |
+| `--all` | Include done/cancelled tasks. Default: active tasks only. |
+| `--field <field>` | Restrict to one field: `title`, `notes`, `tags`, `outcome`, `assignee`. |
+| `--project <slug>` | Restrict to one project. Default: all projects. |
+| `--regexp` | Treat `term` as a regular expression (matched case-insensitively). |
+
+Results are grouped by project. Each match shows the task line, which fields matched, and the matched field value (truncated at 120 chars).
+
+```bash
+search vermont
+search "Green Mountain" --all
+search water --field notes
+search inn --project vermont
+search "plumber|electrician" --regexp
+```
+
+**Python API**: `TaskService.search(term, include_inactive=False, field=None, project_slug=None, use_regexp=False) -> list[dict]`
+
+Each dict contains: `project_slug`, `task`, `matched_fields`.
 
 ---
 

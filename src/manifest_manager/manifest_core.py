@@ -705,6 +705,102 @@ class ManifestRepository:
         ok, results = self._safe_xpath(xpath)
         return results if ok else []
 
+    def full_text_search(
+        self,
+        term: str,
+        scope_xpath: str = None,
+        use_regexp: bool = False,
+    ) -> list[dict]:
+        """Full-text substring (or regexp) search across all attributes and text.
+
+        Walks every element in the tree (or a scoped subtree), scores matches,
+        and returns results sorted by score descending.  This is a backstop
+        command — its job is to find *something* and report exactly which fields
+        matched, so the user can follow up with a precise XPath query.
+
+        Args:
+            term: Substring to find, or regexp pattern when use_regexp is True.
+                  Plain substring match is case-sensitive; use (?i) in the
+                  pattern for case-insensitive regexp matching.
+            scope_xpath: XPath to restrict the walk to a subtree (e.g. //travel).
+                         Defaults to the full tree.
+            use_regexp: If True, compile term with re.compile() and use
+                        pattern.search() at each match site.  re.error
+                        propagates to the caller for clean error reporting.
+
+        Returns:
+            List of result dicts (may be empty). Each dict contains:
+                score         int   — attrs matched score 2 each, text scores 1
+                breadcrumb    str   — "parent > grandparent" path to matched elem
+                elem          Element — live lxml element reference
+                matched_fields list[str] — e.g. ["attr:topic", "text"]
+                elem_id       str | None — value of element's id attribute
+                tag           str   — element tag name
+        """
+        if not self.tree:
+            return []
+
+        # Build matcher — compile once, match everywhere.
+        if use_regexp:
+            pattern = re.compile(term)   # re.error propagates to caller
+            match = pattern.search
+        else:
+            match = lambda val: term in val   # plain case-sensitive substring
+
+        # Determine roots to walk.
+        if scope_xpath:
+            ok, roots = self._safe_xpath(scope_xpath)
+            if not ok or not roots:
+                return []
+            walk_roots = roots
+        else:
+            walk_roots = list(self.root)
+
+        results = []
+
+        for walk_root in walk_roots:
+            for elem in walk_root.iter():
+                matched_fields = []
+                score = 0
+
+                # Attributes — fully dynamic, no hardcoded list.
+                for attr_name, attr_value in elem.attrib.items():
+                    if match(attr_value):
+                        matched_fields.append(f"attr:{attr_name}")
+                        score += 2
+
+                # Text content and tail.
+                for text_piece in [elem.text, elem.tail]:
+                    if text_piece and match(text_piece):
+                        if "text" not in matched_fields:
+                            matched_fields.append("text")
+                            score += 1
+
+                if score == 0:
+                    continue
+
+                # Build breadcrumb: walk up to (not including) the manifest root.
+                ancestors = []
+                p = elem.getparent()
+                while p is not None and p.tag != "manifest":
+                    label = p.get("topic") or p.tag
+                    ancestors.append(label)
+                    p = p.getparent()
+                ancestors.reverse()
+                breadcrumb = " > ".join(ancestors)
+
+                results.append({
+                    "score": score,
+                    "breadcrumb": breadcrumb,
+                    "elem": elem,
+                    "matched_fields": matched_fields,
+                    "elem_id": elem.get("id"),
+                    "tag": elem.tag,
+                })
+
+        results.sort(key=lambda r: r["score"], reverse=True)
+        return results
+
 class ManifestView:
     """Stateless rendering engine."""
     @staticmethod

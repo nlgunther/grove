@@ -209,6 +209,12 @@ NODE OPERATIONS
 
 SEARCHING & VIEWING
 ───────────────────
+  search <term>         Full-tree substring search across all attributes and text.
+      --regexp          Treat <term> as a regular expression (use (?i) for case-insensitive)
+      --scope <xpath>   Restrict walk to a subtree (e.g. --scope //travel)
+      --expand          Show matched node's children in output
+                        Reports matched fields so you can follow up with XPath.
+
   find <prefix>         Find by ID prefix (fast sidecar lookup)
       --tree            Show full subtrees for matches
       --depth N         Limit tree depth
@@ -955,6 +961,67 @@ class ManifestShell(cmd.Cmd):
             return (xpath, None)
         except (ValueError, KeyboardInterrupt):
             return (None, "\nCancelled.")
+
+    def do_search(self, arg):
+        """Full-text search: search <term> [--regexp] [--scope <xpath>] [--expand]
+
+        Substring search (default) or regexp search (--regexp) across every
+        attribute and text node in the loaded manifest.  Reports which fields
+        matched so you can follow up with a precise XPath query.
+
+        Examples:
+            search vermont
+            search "Green Mountain" --expand
+            search "(?i)vermont" --regexp
+            search task --scope //travel --expand
+        """
+        p = SafeParser(prog="search")
+        p.add_argument("term", help="Substring or regexp pattern to find")
+        p.add_argument("--regexp", action="store_true",
+                       help="Treat term as a regular expression")
+        p.add_argument("--scope", help="XPath to restrict search to a subtree")
+        p.add_argument("--expand", action="store_true",
+                       help="Show matched node's children in output")
+
+        def _run():
+            import re as _re
+            args = p.parse_args(shlex.split(arg))
+
+            if not self.repo.tree:
+                print("No manifest loaded.")
+                return
+
+            try:
+                results = self.repo.full_text_search(
+                    args.term,
+                    scope_xpath=args.scope,
+                    use_regexp=args.regexp,
+                )
+            except _re.error as e:
+                print(f"Invalid regexp: {e}")
+                return
+
+            if not results:
+                print(f'No matches for "{args.term}".')
+                return
+
+            max_depth = None if args.expand else 1
+
+            for i, r in enumerate(results):
+                if i > 0:
+                    print()
+                breadcrumb = r["breadcrumb"] or "(top level)"
+                print(f'[score={r["score"]}] {breadcrumb}')
+                tag_str = f"  Tag: {r['tag']}"
+                if r["elem_id"]:
+                    tag_str += f"  ID: {r['elem_id']}"
+                print(tag_str)
+                print(f"  Matched in: {', '.join(r['matched_fields'])}")
+                rendered = ManifestView.render([r["elem"]], max_depth=max_depth)
+                if rendered and rendered.strip() != "No data.":
+                    print(rendered)
+
+        self._exec(_run)
 
     def do_autoid(self, arg):
         """Auto-generate IDs for elements that lack them.

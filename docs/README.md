@@ -56,6 +56,7 @@ reserved_keywords:
   - save
   - list
   - find
+  - search
   - edit
   - delete
 ```
