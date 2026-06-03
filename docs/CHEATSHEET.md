@@ -223,13 +223,13 @@ edit "//task[@id='a3f7b2c1']"   # explicit XPath
 
 ## Status Icons
 
-| Icon | Status | `--status` value |
-|------|--------|-----------------|
-| ○ | todo | `todo` |
-| ▶ | in progress | `in_progress` |
-| ⏳ | waiting | `waiting` |
-| ✓ | done | `done` |
-| ✗ | cancelled | `cancelled` |
+| Icon | Status      | `--status` value |
+| ---- | ----------- | ---------------- |
+| ○    | todo        | `todo`           |
+| ▶    | in progress | `in_progress`    |
+| ⏳    | waiting     | `waiting`        |
+| ✓    | done        | `done`           |
+| ✗    | cancelled   | `cancelled`      |
 
 ---
 

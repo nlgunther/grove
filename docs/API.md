@@ -31,9 +31,9 @@ Start with `manifest` to enter the interactive shell, then `load <file>`.
 load <filename> [--autosc] [--rebuildsc]
 ```
 
-| Option | Description |
-|---|---|
-| `--autosc` | Auto-create ID sidecar if missing |
+| Option        | Description                            |
+| ------------- | -------------------------------------- |
+| `--autosc`    | Auto-create ID sidecar if missing      |
 | `--rebuildsc` | Force-rebuild sidecar from XML on load |
 
 ```bash
@@ -63,12 +63,12 @@ backup [filename] [--timestamp] [--force] [--no-sidecar]
 
 Creates a backup of the current manifest. Also copies the global config file (`%APPDATA%\manifest\config.yaml` on Windows) alongside the backup as `<backup>.config.yaml`. If the config file is not found a warning is printed and the backup continues. The sidecar (`.ids`) is also copied unless `--no-sidecar` is passed.
 
-| Option | Description |
-|---|---|
-| `filename` | Custom backup path (default: `<file>.bkp.xml`) |
-| `--timestamp` | Use datestamp instead of `.bkp` |
-| `--force` | Overwrite without prompting |
-| `--no-sidecar` | Skip sidecar backup (config is still copied) |
+| Option         | Description                                    |
+| -------------- | ---------------------------------------------- |
+| `filename`     | Custom backup path (default: `<file>.bkp.xml`) |
+| `--timestamp`  | Use datestamp instead of `.bkp`                |
+| `--force`      | Overwrite without prompting                    |
+| `--no-sidecar` | Skip sidecar backup (config is still copied)   |
 
 ---
 
@@ -89,17 +89,17 @@ add <shortcut> ["Title"] [options]      # shortcut syntax
 add --tag <n> [options]                  # full syntax
 ```
 
-| Option | Description |
-|---|---|
-| `--tag <n>` | Tag name (required in full syntax) |
-| `--topic <text>` | Topic / title attribute |
-| `--status <value>` | Status |
-| `--resp <n>` | Responsible party |
-| `--due <date>` | Due date — natural language or `YYYY-MM-DD` |
-| `--parent <selector>` | Parent XPath or ID prefix (default: `/*`) |
-| `--id <value>` | Custom ID |
-| `--id False` | Disable auto-ID |
-| `-a <key=value>` | Custom attribute (repeatable) |
+| Option                | Description                                 |
+| --------------------- | ------------------------------------------- |
+| `--tag <n>`           | Tag name (required in full syntax)          |
+| `--topic <text>`      | Topic / title attribute                     |
+| `--status <value>`    | Status                                      |
+| `--resp <n>`          | Responsible party                           |
+| `--due <date>`        | Due date — natural language or `YYYY-MM-DD` |
+| `--parent <selector>` | Parent XPath or ID prefix (default: `/*`)   |
+| `--id <value>`        | Custom ID                                   |
+| `--id False`          | Disable auto-ID                             |
+| `-a <key=value>`      | Custom attribute (repeatable)               |
 
 `--due` accepts all formats understood by `shared.dates.parse_date`: `today`, `tomorrow`, `+N`, weekday names, ISO, and US format.
 
@@ -121,16 +121,16 @@ add --tag item --topic "Chair" -a colour=blue
 edit <selector> [options]
 ```
 
-| Option | Description |
-|---|---|
-| `--topic <text>` | Update topic |
-| `--status <value>` | Update status |
-| `--resp <n>` | Update responsible party |
-| `--due <date>` | Update due date |
-| `--text <text>` | Update body text |
-| `-a <key=value>` | Add / update attribute |
-| `--delete` | Delete matched node(s) |
-| `--id` / `--xpath` | Force interpretation |
+| Option             | Description              |
+| ------------------ | ------------------------ |
+| `--topic <text>`   | Update topic             |
+| `--status <value>` | Update status            |
+| `--resp <n>`       | Update responsible party |
+| `--due <date>`     | Update due date          |
+| `--text <text>`    | Update body text         |
+| `-a <key=value>`   | Add / update attribute   |
+| `--delete`         | Delete matched node(s)   |
+| `--id` / `--xpath` | Force interpretation     |
 
 `last_modified` is automatically updated to today's date on every successful edit.
 
@@ -194,11 +194,11 @@ grep <term> [--ignore-case]
 
 Searches the loaded manifest in three passes, printing results for each:
 
-| Pass | What is searched | XPath equivalent |
-|---|---|---|
-| Tag names | Element tag equals term (exact) | `//*[local-name()='<term>']` |
-| Attributes | Any attribute value contains term | `//*[@*[contains(.,'\<term>')]]` |
-| Text | Element text content contains term | `//*[contains(text(),'\<term>')]` |
+| Pass       | What is searched                   | XPath equivalent                  |
+| ---------- | ---------------------------------- | --------------------------------- |
+| Tag names  | Element tag equals term (exact)    | `//*[local-name()='<term>']`      |
+| Attributes | Any attribute value contains term  | `//*[@*[contains(.,'\<term>')]]`  |
+| Text       | Element text content contains term | `//*[contains(text(),'\<term>')]` |
 
 Each section prints a match count and a tree view of hits, or `(none)` if empty. Search is case-sensitive by default.
 
@@ -251,12 +251,12 @@ Export manifest nodes directly into the Smart Scheduler as tasks.
 export-scheduler [selector] --project <slug> [--name <n>] [--engine json|sqlite]
 ```
 
-| Option | Description |
-|---|---|
-| `selector` | XPath or ID prefix. Defaults to `export_scheduler.default_xpath` in `integration.yaml`, or `//task[@due]` |
-| `--project` | Scheduler project slug (required). Created if absent. |
-| `--name` | Project display name (used only when creating) |
-| `--engine` | `json` (default) or `sqlite` |
+| Option      | Description                                                                                               |
+| ----------- | --------------------------------------------------------------------------------------------------------- |
+| `selector`  | XPath or ID prefix. Defaults to `export_scheduler.default_xpath` in `integration.yaml`, or `//task[@due]` |
+| `--project` | Scheduler project slug (required). Created if absent.                                                     |
+| `--name`    | Project display name (used only when creating)                                                            |
+| `--engine`  | `json` (default) or `sqlite`                                                                              |
 
 Requires `paths.scheduler_data_dir` in `config/integration.yaml`.  
 Status conversion requires `status_mapping.to_scheduler` to be configured; otherwise tasks arrive as `todo`.
@@ -475,13 +475,13 @@ Import tasks from a Manifest Manager XML file.
 import-manifest <file> --project <slug> [--xpath <expr>] [--engine json|sqlite]
 ```
 
-| Option | Description |
-|---|---|
-| `file` | Path to manifest XML file |
-| `--project` | Target project slug (required). Created if absent. |
-| `--name` | Project display name (used only when creating) |
-| `--xpath` | Node selector. Defaults to `import_manifest.default_xpath` in `integration.yaml`, or `//task[@due]` |
-| `--engine` | `json` (default) or `sqlite` |
+| Option      | Description                                                                                         |
+| ----------- | --------------------------------------------------------------------------------------------------- |
+| `file`      | Path to manifest XML file                                                                           |
+| `--project` | Target project slug (required). Created if absent.                                                  |
+| `--name`    | Project display name (used only when creating)                                                      |
+| `--xpath`   | Node selector. Defaults to `import_manifest.default_xpath` in `integration.yaml`, or `//task[@due]` |
+| `--engine`  | `json` (default) or `sqlite`                                                                        |
 
 ```bash
 import-manifest projects.xml --project q1-work
@@ -534,16 +534,16 @@ maintenance --optimize
 
 Both tools resolve `--due` values through `shared.dates.parse_date`.
 
-| Input | Result |
-|---|---|
-| `today` | Current date |
-| `tomorrow` | +1 day |
-| `yesterday` | −1 day |
-| `+N` | +N days |
-| `monday` … `sunday` | Next occurrence (never today) |
-| `2026-12-25` | ISO passthrough |
-| `12/25/2026` | US format → ISO |
-| anything else | `None` (original value preserved) |
+| Input               | Result                            |
+| ------------------- | --------------------------------- |
+| `today`             | Current date                      |
+| `tomorrow`          | +1 day                            |
+| `yesterday`         | −1 day                            |
+| `+N`                | +N days                           |
+| `monday` … `sunday` | Next occurrence (never today)     |
+| `2026-12-25`        | ISO passthrough                   |
+| `12/25/2026`        | US format → ISO                   |
+| anything else       | `None` (original value preserved) |
 
 Multi-word expressions require quotes: `--due "next friday"`.
 
@@ -703,18 +703,18 @@ content = writer.to_string()
 
 ### `ManifestRepository`
 
-| Method | Description |
-|---|---|
-| `load(filepath, password, auto_sidecar, rebuild_sidecar)` | Load XML or 7z |
-| `save(filepath, password)` | Save XML or 7z |
-| `add_node(parent_xpath, spec, auto_id=True)` | Add a node; stamps `last_modified` automatically |
-| `edit_node(xpath, spec, delete=False)` | Edit/delete by XPath; stamps `last_modified` on edit |
-| `edit_node_by_id(elem_id, spec, delete=False)` | Edit/delete by ID; stamps `last_modified` on edit |
-| `ensure_ids(overwrite=False)` | Assign IDs to nodes missing one |
-| `search(xpath)` | Return list of matching elements |
-| `search_by_id_prefix(prefix)` | Return elements matching ID prefix |
-| `wrap_content(new_root_tag)` | Wrap top-level nodes |
-| `merge_from(path, password)` | Merge another manifest |
+| Method                                                    | Description                                          |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| `load(filepath, password, auto_sidecar, rebuild_sidecar)` | Load XML or 7z                                       |
+| `save(filepath, password)`                                | Save XML or 7z                                       |
+| `add_node(parent_xpath, spec, auto_id=True)`              | Add a node; stamps `last_modified` automatically     |
+| `edit_node(xpath, spec, delete=False)`                    | Edit/delete by XPath; stamps `last_modified` on edit |
+| `edit_node_by_id(elem_id, spec, delete=False)`            | Edit/delete by ID; stamps `last_modified` on edit    |
+| `ensure_ids(overwrite=False)`                             | Assign IDs to nodes missing one                      |
+| `search(xpath)`                                           | Return list of matching elements                     |
+| `search_by_id_prefix(prefix)`                             | Return elements matching ID prefix                   |
+| `wrap_content(new_root_tag)`                              | Wrap top-level nodes                                 |
+| `merge_from(path, password)`                              | Merge another manifest                               |
 
 All mutating methods return a `Result(success, message, data)`.
 
