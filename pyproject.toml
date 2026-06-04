@@ -15,7 +15,9 @@ dependencies = [
 
 [project.scripts]
 manifest  = "manifest_manager.__main__:main"
+mnft  = "manifest_manager.__main__:main"
 scheduler = "smart_scheduler.__main__:main"
+schd = "smart_scheduler.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]  # Auto-discovers manifest_manager, smart_scheduler, shared

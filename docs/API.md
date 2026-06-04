@@ -31,16 +31,22 @@ Start with `manifest` to enter the interactive shell, then `load <file>`.
 load <filename> [--autosc] [--rebuildsc]
 ```
 
-| Option        | Description                            |
-| ------------- | -------------------------------------- |
-| `--autosc`    | Auto-create ID sidecar if missing      |
+| Option                                                                                                                                                                             | Description                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `--autosc`                                                                                                                                                                         | Auto-create ID sidecar if missing |
+| `filename` may be a literal path or a named alias defined in `config/integration.yaml` under `named_files`. When an alias is matched, the resolved path is printed before loading. |                                   |
+
+| Option     | Description                       |
+| ---------- | --------------------------------- |
+| `--autosc` | Auto-create ID sidecar if missing |
+
 | `--rebuildsc` | Force-rebuild sidecar from XML on load |
 
 ```bash
 load myproject.xml --autosc
+load basic                  # resolves via named_files in integration.yaml
+load basic --autosc
 load backup.7z              # prompts for password
-load basic                  # expands alias defined in global config
-load basic --autosc         # alias expansion + sidecar
 ```
 
 ---
@@ -103,8 +109,6 @@ add --tag <n> [options]                  # full syntax
 
 `--due` accepts all formats understood by `shared.dates.parse_date`: `today`, `tomorrow`, `+N`, weekday names, ISO, and US format.
 
-Every new node is automatically stamped with a `last_modified` attribute set to the current date (`YYYY-MM-DD`). This attribute is managed by the repository layer and cannot be set via `--attr`.
-
 ```bash
 add task "Review PR"
 add task "Deploy" --status active --resp alice --due tomorrow
@@ -131,8 +135,6 @@ edit <selector> [options]
 | `-a <key=value>`   | Add / update attribute   |
 | `--delete`         | Delete matched node(s)   |
 | `--id` / `--xpath` | Force interpretation     |
-
-`last_modified` is automatically updated to today's date on every successful edit.
 
 ---
 
@@ -162,8 +164,6 @@ Both selectors accept ID prefix or XPath; each must match exactly one node.
 show <selector> [--id] [--xpath]
 ```
 
-Displays all attributes including `last_modified`, regardless of the `verbose` setting.
-
 ---
 
 ### `find`
@@ -172,7 +172,37 @@ Displays all attributes including `last_modified`, regardless of the `verbose` s
 find <prefix> [--tree] [--depth N]
 ```
 
-Requires sidecar index (load with `--autosc`). Tree output respects the current `verbose` setting.
+Requires sidecar index (load with `--autosc`).
+
+---
+
+### `search`
+
+```
+search <term> [--regexp] [--scope <xpath>] [--expand]
+```
+
+Full-tree substring (or regexp) search across every attribute and text node. A backstop command — use it when targeted XPath or ID queries have failed. Reports which fields matched so you can follow up with a precise query. No sidecar required.
+
+| Option            | Description                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| `term`            | Substring to find (required). Quote multi-word terms in the shell.                          |
+| `--regexp`        | Treat `term` as a regular expression. Use `(?i)` inline flag for case-insensitive matching. |
+| `--scope <xpath>` | Restrict walk to a subtree (e.g. `--scope //travel`). Default: full tree.                   |
+| `--expand`        | Show matched node's children in output. Default: matched node only.                         |
+
+Scoring: each matching attribute scores 2; text content scores 1. Results are printed in descending score order.
+
+```bash
+search vermont
+search "Green Mountain" --expand
+search "(?i)vermont" --regexp
+search task --scope //travel
+```
+
+**Python API**: `ManifestRepository.full_text_search(term, scope_xpath=None, use_regexp=False) -> list[dict]`
+
+Each dict contains: `score`, `breadcrumb`, `elem`, `matched_fields`, `elem_id`, `tag`.
 
 ---
 
@@ -370,7 +400,22 @@ Start with `scheduler` to enter the interactive shell.
 list
 list --all [--show-done]
 list projects
-list tasks [<project_slug>]
+list tasks [<project_slug>] [--upcoming]
+```
+
+| Flag          | Description                                                                                                                                                           |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--all`       | Detailed hierarchical view                                                                                                                                            |
+| `--show-done` | Include completed/cancelled tasks                                                                                                                                     |
+| `--upcoming`  | Active tasks with no due date or a due date of today or later. Excludes done, cancelled, and overdue tasks. Results sorted by due date ascending, undated tasks last. |
+
+```bash
+list                        # project summary
+list --all                  # all tasks, hides completed
+list --all --show-done      # everything
+list tasks work             # tasks in 'work' project
+list tasks --upcoming       # active + future tasks across all projects
+list tasks work --upcoming  # same, scoped to 'work'
 ```
 
 ---
@@ -382,6 +427,38 @@ show <task_id>
 show <contact_id>
 show <project_slug>
 ```
+
+---
+
+### `search`
+
+```
+search <term> [--all] [--field <field>] [--project <slug>] [--regexp]
+```
+
+Full-text search across task fields. A backstop command — use it when you can't remember which project or field holds a piece of information. Reports which fields matched so you can follow up with targeted `list` filters. Search is always case-insensitive.
+
+| Option             | Description                                                             |
+| ------------------ | ----------------------------------------------------------------------- |
+| `term`             | Substring or regexp pattern to find (required).                         |
+| `--all`            | Include done/cancelled tasks. Default: active tasks only.               |
+| `--field <field>`  | Restrict to one field: `title`, `notes`, `tags`, `outcome`, `assignee`. |
+| `--project <slug>` | Restrict to one project. Default: all projects.                         |
+| `--regexp`         | Treat `term` as a regular expression (matched case-insensitively).      |
+
+Results are grouped by project. Each match shows the task line, which fields matched, and the matched field value (truncated at 120 chars).
+
+```bash
+search vermont
+search "Green Mountain" --all
+search water --field notes
+search inn --project vermont
+search "plumber|electrician" --regexp
+```
+
+**Python API**: `TaskService.search(term, include_inactive=False, field=None, project_slug=None, use_regexp=False) -> list[dict]`
+
+Each dict contains: `project_slug`, `task`, `matched_fields`.
 
 ---
 
@@ -604,16 +681,6 @@ Config is cached per-process; restart the shell after editing.
 
 ### `shared.dates`
 
-#### `today_str()`
-
-```python
-from shared.dates import today_str
-
-today_str()   # "2026-04-15"
-```
-
-Single source of truth for `last_modified` stamping. Returns today's date as an ISO 8601 string.
-
 #### `parse_date(date_str)`
 
 ```python
@@ -703,28 +770,20 @@ content = writer.to_string()
 
 ### `ManifestRepository`
 
-| Method                                                    | Description                                          |
-| --------------------------------------------------------- | ---------------------------------------------------- |
-| `load(filepath, password, auto_sidecar, rebuild_sidecar)` | Load XML or 7z                                       |
-| `save(filepath, password)`                                | Save XML or 7z                                       |
-| `add_node(parent_xpath, spec, auto_id=True)`              | Add a node; stamps `last_modified` automatically     |
-| `edit_node(xpath, spec, delete=False)`                    | Edit/delete by XPath; stamps `last_modified` on edit |
-| `edit_node_by_id(elem_id, spec, delete=False)`            | Edit/delete by ID; stamps `last_modified` on edit    |
-| `ensure_ids(overwrite=False)`                             | Assign IDs to nodes missing one                      |
-| `search(xpath)`                                           | Return list of matching elements                     |
-| `search_by_id_prefix(prefix)`                             | Return elements matching ID prefix                   |
-| `wrap_content(new_root_tag)`                              | Wrap top-level nodes                                 |
-| `merge_from(path, password)`                              | Merge another manifest                               |
+| Method                                                    | Description                        |
+| --------------------------------------------------------- | ---------------------------------- |
+| `load(filepath, password, auto_sidecar, rebuild_sidecar)` | Load XML or 7z                     |
+| `save(filepath, password)`                                | Save XML or 7z                     |
+| `add_node(parent_xpath, spec, auto_id=True)`              | Add a node                         |
+| `edit_node(xpath, spec, delete=False)`                    | Edit/delete by XPath               |
+| `edit_node_by_id(elem_id, spec, delete=False)`            | Edit/delete by ID                  |
+| `ensure_ids(overwrite=False)`                             | Assign IDs to nodes missing one    |
+| `search(xpath)`                                           | Return list of matching elements   |
+| `search_by_id_prefix(prefix)`                             | Return elements matching ID prefix |
+| `wrap_content(new_root_tag)`                              | Wrap top-level nodes               |
+| `merge_from(path, password)`                              | Merge another manifest             |
 
-All mutating methods return a `Result(success, message, data)`.
-
-### `ManifestView`
-
-```python
-ManifestView.render(nodes, style="tree", max_depth=None, hide_attrs=True)
-```
-
-`hide_attrs=True` (default) suppresses `topic`, `status`, `resp`, and `last_modified` from the inline attrs bracket. Pass `hide_attrs=False` to show all attributes — equivalent to the `verbose` shell command.
+All methods return a `Result(success, message, data)`.
 
 ### `NodeSpec`
 
@@ -738,8 +797,6 @@ spec = NodeSpec(
 )
 spec = NodeSpec.from_args(args, attributes=extra_attrs)
 ```
-
-`last_modified` is not a `NodeSpec` field. It is set unconditionally by the repository layer on every create and edit operation.
 
 ### `TaskService`
 
@@ -805,25 +862,6 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 ```
 
-### Global config — `%APPDATA%\manifest\config.yaml` (Windows) / `~/.config/manifest/config.yaml` (macOS/Linux)
-
-```yaml
-# Short names for long paths — used by the load command
-aliases:
-  basic: "g:/my drive/manifests/todo2026"
-  work:  "g:/my drive/manifests/work2026"
-  vt:    "g:/my drive/manifests/greensboro"
-
-# Auto-load a file on every manifest launch
-startup:
-  default_file: "g:/my drive/manifests/todo2026"
-  autosc: true
-```
-
-`aliases` keys are exact-match only — `load bas` does not expand `basic`. All normal flags (`--autosc`, `--rebuildsc`) apply after expansion.
-
----
-
 ### `config/shortcuts.yaml`
 
 ```yaml
@@ -852,6 +890,33 @@ reserved_keywords:
 ### `config/integration.yaml`
 
 See [Cross-Tool Integration](#cross-tool-integration) above for full reference.
+
+```yaml
+paths:
+  scheduler_data_dir: "G:/My Drive/schedulers"
+
+named_files:
+  basic: "G:/My Drive/manifests/todo2026.xml"
+  work:  "G:/My Drive/manifests/work.xml"
+
+status_mapping:
+  to_scheduler:
+    active:    in_progress
+    pending:   todo
+    blocked:   waiting
+  to_manifest:
+    in_progress: active
+
+export_scheduler:
+  default_xpath: ""
+  on_missing_due: skip
+  store_manifest_id: true
+
+import_manifest:
+  default_xpath: ""
+  on_missing_due: skip
+  store_manifest_id: true
+```
 
 ### Scheduler config — `~/.scheduler/config.json`
 

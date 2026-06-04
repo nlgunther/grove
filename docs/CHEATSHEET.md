@@ -19,11 +19,11 @@ scheduler      # Smart Scheduler interactive shell
 
 ```bash
 load myproject.xml              # Load (creates if missing)
+load basic                      # Load by alias (defined in integration.yaml)
+load basic --autosc             # Load alias + create sidecar
 load myproject.xml --autosc     # Load + create sidecar if missing
 load myproject.xml --rebuildsc  # Load + force-rebuild sidecar
 load backup.7z                  # Load encrypted (prompts password)
-load basic                      # Expand alias from global config
-load basic --autosc             # Alias + sidecar
 
 save                            # Overwrite current file
 save backup.xml                 # Save to new file
@@ -61,8 +61,6 @@ add task "Custom" --id my-id-123
 
 `--due` accepts natural language: `today`, `tomorrow`, `yesterday`, `+N`, weekday names, `YYYY-MM-DD`, `MM/DD/YYYY`.
 
-Every new node is automatically stamped with `last_modified="YYYY-MM-DD"`.
-
 **Default shortcuts**: `task`, `project`, `item`, `note`, `milestone`, `idea`, `location`, `contact`, `reference`, `resource`  
 Add custom shortcuts in `config/shortcuts.yaml`.
 
@@ -87,8 +85,6 @@ move a3f7 b1c2                 # by ID
 move a3f //archive             # ID → XPath
 ```
 
-`last_modified` is updated automatically on every edit.
-
 ---
 
 ## View & Search
@@ -109,25 +105,15 @@ grep todo --ignore-case         # -i short form also works
 show a3f7                       # always shows all attributes
 show "//project[1]"
 
-verbose                         # toggle hidden attrs in list/find output
+search vermont                  # substring search across all attrs and text
+search "Green Mountain"         # multi-word (quote in shell)
+search "(?i)vermont" --regexp   # regexp: use (?i) for case-insensitive
+search task --scope //travel    # restrict walk to a subtree
+search inn --expand             # show matched node's children
 ```
 
----
-
-## Auditing last_modified
-
-```bash
-# Find nodes not yet touched since upgrading to this version
-search /manifest//*[not(@last_modified)]
-
-# Find nodes modified today
-search //*[@last_modified='2026-04-15']
-
-# Show all attributes including last_modified in list output
-verbose
-list
-verbose                         # toggle back off when done
-```
+`search` is a backstop — it reports which fields matched so you can follow up
+with a precise XPath query.  It has no dependency on the sidecar.
 
 ---
 
@@ -195,9 +181,6 @@ cheatsheet
 //task[@due]                    # nodes with a due attribute
 //task[@status='active'][@resp='alice']
 //*[contains(@topic,'bug')]
-//*[@last_modified]             # nodes that have been stamped
-//*[not(@last_modified)]        # nodes not yet touched (pre-upgrade)
-/manifest//*[not(@last_modified)]  # same, excluding root element
 ```
 
 ---
@@ -233,7 +216,7 @@ edit "//task[@id='a3f7b2c1']"   # explicit XPath
 
 ---
 
-## View
+## View & Search
 
 ```bash
 list                            # project summary
@@ -241,8 +224,20 @@ list --all                      # detailed (hides completed)
 list --all --show-done
 list tasks / list tasks work
 
+list tasks --upcoming           # active tasks: no due date or due date >= today
+list tasks work --upcoming      # same, scoped to one project
+
 show t30b0a / show work
+
+search vermont                  # substring search, all fields, active tasks
+search "Green Mountain" --all   # include done/cancelled
+search water --field notes      # restrict to one field
+search inn --project vermont    # restrict to one project
+search "plumber|electrician" --regexp   # regexp (always case-insensitive)
 ```
+
+`search` is a backstop — it reports which field(s) matched so you can follow
+up with targeted `list` filters.  Search is always case-insensitive.
 
 ---
 
@@ -330,34 +325,17 @@ config reset
 
 ---
 
-# GLOBAL CONFIG (`%APPDATA%\manifest\config.yaml`)
-
-```yaml
-aliases:
-  basic: "g:/my drive/manifests/todo2026"
-  work:  "g:/my drive/manifests/work2026"
-
-startup:
-  default_file: "g:/my drive/manifests/todo2026"
-  autosc: true
-```
-
-Create this file manually if it doesn't exist. `aliases` are exact-match; flags like `--autosc` still apply after expansion.
-
----
-
 # SHARED INFRASTRUCTURE
 
 ```python
 from shared import generate_id, validate_id, file_lock, LockTimeout
-from shared.dates import parse_date, today_str
+from shared.dates import parse_date
 from shared.status_map import to_scheduler_status, to_manifest_status
 from shared.calendar.ics_writer import CalendarEvent, ICSWriter
 
 generate_id()                       # "a3f7b2c1"
 generate_id(prefix="t", length=5)   # "ta3f7b"
 parse_date("tomorrow")              # "2026-04-15"
-today_str()                         # "2026-04-15"  (used for last_modified)
 to_scheduler_status("active")       # "in_progress" if configured, else None
 
 with file_lock(Path("data.json"), timeout=5):
@@ -374,12 +352,18 @@ with file_lock(Path("data.json"), timeout=5):
 paths:
   scheduler_data_dir: "G:/My Drive/schedulers"
 
+named_files:
+  basic: "G:/My Drive/manifests/todo2026.xml"
+  work:  "G:/My Drive/manifests/work.xml"
+
 status_mapping:
   to_scheduler:
     active:  in_progress   # uncomment to enable
     pending: todo
     blocked: waiting
 ```
+
+`named_files` entries can be used anywhere the manifest `load` command accepts a filename. Add as many as you like — names are case-sensitive.
 
 Changes take effect on next shell start (config is cached per-process).
 

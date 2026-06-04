@@ -10,6 +10,7 @@ Features:
 - Comprehensive help
 """
 import sys
+import re
 import shlex
 from pathlib import Path
 from .config import get_config
@@ -87,11 +88,25 @@ def cmd_list(cli, args):
         list projects             List only projects (summary)
         list tasks                List all tasks across all projects
         list tasks <project>      List tasks in specific project
+        list tasks --upcoming     Active tasks with no due date or a future due date
     """
     pos, opts = cli._opts(args)
     
     show_done = "show-done" in opts or "show_done" in opts
     show_all = "all" in opts
+    upcoming = "upcoming" in opts
+
+    # Filter function: upcoming = not done/cancelled AND (no due date OR due date >= today)
+    def _is_upcoming(t):
+        from datetime import date
+        if t.status in (TaskStatus.DONE, TaskStatus.CANCELLED):
+            return False
+        if t.due_date:
+            try:
+                return date.fromisoformat(t.due_date) >= date.today()
+            except ValueError:
+                return True  # unparseable date — include rather than silently drop
+        return True  # no due date — always included
     
     # Determine what to list
     what = pos[0] if pos else ("all" if show_all else "projects")
@@ -169,16 +184,20 @@ def cmd_list(cli, args):
             if not p:
                 return print(f"Project '{project_slug}' not found")
             
-            if show_done:
+            if upcoming:
+                tasks = [t for t in p.tasks if _is_upcoming(t)]
+            elif show_done:
                 tasks = p.tasks
             else:
                 tasks = [t for t in p.tasks if t.status not in (TaskStatus.DONE, TaskStatus.CANCELLED)]
             
             if not tasks:
-                return print(f"No {'active ' if not show_done else ''}tasks in '{p.name}'")
+                return print(f"No {'upcoming ' if upcoming else 'active ' if not show_done else ''}tasks in '{p.name}'")
             
             print(f"\n=== TASKS IN {p.name} ===")
-            if not show_done:
+            if upcoming:
+                print("(Showing upcoming: active tasks with no due date or future due date)\n")
+            elif not show_done:
                 print("(Hiding completed tasks. Use --show-done to see all)\n")
             
             for t in tasks:
@@ -190,16 +209,29 @@ def cmd_list(cli, args):
             
             for p in projects:
                 for t in p.tasks:
-                    if show_done or t.status not in (TaskStatus.DONE, TaskStatus.CANCELLED):
+                    if upcoming:
+                        include = _is_upcoming(t)
+                    else:
+                        include = show_done or t.status not in (TaskStatus.DONE, TaskStatus.CANCELLED)
+                    if include:
                         t._project_slug = p.slug
                         t._project_name = p.name
                         all_tasks.append(t)
             
+            # Sort by due date: tasks with a due date first (ascending), then no due date
+            from datetime import date
+            all_tasks.sort(key=lambda t: (
+                t.due_date is None,
+                t.due_date or ""
+            ))
+
             if not all_tasks:
-                return print("No tasks.")
+                return print("No upcoming tasks." if upcoming else "No tasks.")
             
-            print(f"\n=== ALL TASKS ===")
-            if not show_done:
+            print(f"\n=== {'UPCOMING ' if upcoming else ''}ALL TASKS ===")
+            if upcoming:
+                print("(Active tasks with no due date or a future due date)\n")
+            elif not show_done:
                 print("(Hiding completed tasks. Use --show-done to see all)\n")
             
             for t in all_tasks:
@@ -1484,6 +1516,15 @@ MAINTENANCE:
   config location <path>    Move data directory
   config reset              Reset to default configuration
 
+SEARCHING:
+  search <term>             Full-text search across all tasks and fields
+  search <term> --all       Include done/cancelled tasks
+  search <term> --field notes|title|tags|outcome|assignee
+                            Restrict to one field
+  search <term> --project <slug>
+                            Restrict to one project
+  search <term> --regexp    Treat term as a regexp (case-insensitive)
+
 UTILITY:
   export <id> <format>      Export to ICS/JSON/CSV
   help [command]            Show this help or command-specific help
@@ -1535,6 +1576,7 @@ Usage:
   list projects             Project summary only
   list tasks                All tasks across all projects
   list tasks <project>      Tasks in specific project
+  list tasks --upcoming     Active tasks with no due date or a future due date
 
 Examples:
   list --all               # Detailed view, hides completed
@@ -1609,6 +1651,27 @@ Examples:
   add task work "Deploy website" --due "2026-03-01" --tags deploy,urgent
   add task work "Fix bug" --note "Issue reported by client"
   add contact work "John Doe" --role "Client" --email "john@example.com"
+""",
+            "search": """
+SEARCH - Full-text search across all tasks
+
+Usage:
+  search <term>                         Search all active tasks, all fields
+  search <term> --all                   Include done/cancelled tasks
+  search <term> --field <field>         Restrict to one field
+  search <term> --project <slug>        Restrict to one project
+  search <term> --regexp                Treat term as regexp (IGNORECASE)
+
+Valid fields: title, notes, tags, outcome, assignee
+
+Results are grouped by project. Each match shows which field(s) matched
+and the matched field value (truncated at 120 chars).
+
+Examples:
+  search vermont
+  search "Green Mountain" --all
+  search water --field notes --project home
+  search "plumber|electrician" --regexp
 """,
             "config": """
 CONFIG - View and modify configuration
@@ -1719,6 +1782,83 @@ def cmd_import_manifest(cli, args):
     print(result)
 
 
+def cmd_search(cli, args):
+    """Full-text search across all tasks and fields.
+
+    Usage:
+        search <term> [--all] [--field title|notes|tags|outcome|assignee]
+                      [--project <slug>] [--regexp]
+
+    Reports which fields matched so you can follow up with targeted filters.
+    Search is case-insensitive by default.
+    --all includes done/cancelled tasks.
+    --regexp treats <term> as a case-insensitive regular expression.
+
+    Examples:
+        search vermont
+        search "Green Mountain" --all
+        search water --field notes
+        search "plumber|electrician" --regexp
+        search inn --project vermont
+    """
+    pos, opts = cli._opts(args)
+    if not pos:
+        print("Usage: search <term> [--all] [--field title|notes|tags|outcome|assignee]"
+              " [--project <slug>] [--regexp]")
+        return
+
+    term = pos[0]
+    include_inactive = "all" in opts
+    field = opts.get("field")
+    project_slug = opts.get("project")
+    use_regexp = "regexp" in opts
+
+    valid_fields = {"title", "notes", "tags", "outcome", "assignee"}
+    if field and field not in valid_fields:
+        print(f"Unknown field '{field}'. Valid fields: {', '.join(sorted(valid_fields))}")
+        return
+
+    try:
+        results = cli.task_service.search(term, include_inactive, field, project_slug, use_regexp)
+    except re.error as e:
+        print(f"Invalid regexp: {e}")
+        return
+
+    if not results:
+        print(f'No matches for "{term}".')
+        return
+
+    # Group by project slug, preserving order of first appearance.
+    by_project = {}
+    for r in results:
+        by_project.setdefault(r["project_slug"], []).append(r)
+
+    _MAX = 120   # truncate long field values at this many characters
+
+    for slug, group in by_project.items():
+        print(f"\n[{slug}]")
+        for r in group:
+            task = r["task"]
+            fields_str = ", ".join(r["matched_fields"])
+            print(f"  {task.id} {task.status.icon}  {task.title}")
+            print(f"           Matched in: {fields_str}")
+            for f in r["matched_fields"]:
+                if f == "title":
+                    continue   # already shown on the task line
+                elif f == "notes" and task.notes:
+                    val = task.notes.replace("\n", " ")
+                    val = val[:_MAX] + ("…" if len(val) > _MAX else "")
+                    print(f'           Notes: "{val}"')
+                elif f == "outcome" and task.outcome:
+                    val = task.outcome.replace("\n", " ")
+                    val = val[:_MAX] + ("…" if len(val) > _MAX else "")
+                    print(f'           Outcome: "{val}"')
+                elif f == "assignee" and task.assignee:
+                    print(f"           Assignee: {task.assignee}")
+                elif f == "tags" and task.tags:
+                    print(f"           Tags: {', '.join(task.tags)}")
+
+
 _COMMANDS = {
     "list": cmd_list,
     "show": cmd_show,
@@ -1734,6 +1874,7 @@ _COMMANDS = {
     "export-json": cmd_export_json,
     "import-json": cmd_import_json,
     "import-manifest": cmd_import_manifest,
+    "search": cmd_search,
     "config": cmd_config,
     "help": cmd_help,
 }
