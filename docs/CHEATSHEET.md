@@ -49,10 +49,12 @@ add task "Deploy" --due +3
 add task "Deploy" --due friday
 add task "Subtask" --parent a3f7
 add project "Q1 Goals" --status planning
+add task "Board meeting" --location "Room 4B"
+add task "Site visit" --due friday -l "123 Main St"
 
 # Full syntax (always works)
 add --tag task --topic "Review PR"
-add --tag item --topic "Chair" -a colour=blue
+add --tag item --topic "Chair" -a colour=blue -a size=large  # -a is repeatable
 
 # ID control
 add task "No ID" --id False
@@ -61,8 +63,24 @@ add task "Custom" --id my-id-123
 
 `--due` accepts natural language: `today`, `tomorrow`, `yesterday`, `+N`, weekday names, `YYYY-MM-DD`, `MM/DD/YYYY`.
 
+`--location` / `-l` is shorthand for `-a location=<value>`. Both produce the same XML attribute and are queryable with `//task[@location]`.
+
 **Default shortcuts**: `task`, `project`, `item`, `note`, `milestone`, `idea`, `location`, `contact`, `reference`, `resource`  
 Add custom shortcuts in `config/shortcuts.yaml`.
+
+### Custom attributes (`-a`)
+
+```bash
+add task "Order chair" -a colour=blue -a size=large   # multiple attrs
+add task "Config" -a expr=a=b+c                        # '=' allowed in value
+```
+
+| Rule          | Detail                                     |
+| ------------- | ------------------------------------------ |
+| Repeatable    | One `-a key=value` per attribute           |
+| `=` in value  | Fine — only the first `=` is the delimiter |
+| Duplicate key | Last value wins                            |
+| No `=`        | Entry silently ignored                     |
 
 ---
 
@@ -74,7 +92,8 @@ edit a3f7 --topic "Updated title"
 edit a3f7 --due tomorrow
 edit a3f7 --resp alice
 edit a3f7 --text "New body text"
-edit a3f7 -a priority=high
+edit a3f7 -a priority=high            # add/update a custom attribute
+edit a3f7 -a priority=                # remove (set to empty string)
 edit "//task[@status='pending']" --status active
 
 delete a3f7
@@ -181,6 +200,12 @@ cheatsheet
 //task[@due]                    # nodes with a due attribute
 //task[@status='active'][@resp='alice']
 //*[contains(@topic,'bug')]
+
+# Querying custom attributes (set via -a)
+//*[@priority]                              # has the attribute at all
+//*[@priority='high']                       # exact value
+//*[contains(@colour,'bl')]                 # value contains substring
+//task[@priority='high'][@status='active']  # combine with other filters
 ```
 
 ---

@@ -77,6 +77,7 @@ class NodeSpec:
         text: Text content of element
         resp: Responsible party attribute (NEW in v3.4)
         due: Due date in YYYY-MM-DD format (NEW in v3.5)
+        location: Physical or logical location string (NEW in v3.6)
         attrs: Additional custom attributes (dict)
     """
     tag: str
@@ -85,6 +86,7 @@ class NodeSpec:
     text: Optional[str] = None
     resp: Optional[str] = None
     due: Optional[str] = None
+    location: Optional[str] = None
     attrs: Dict[str, str] = field(default_factory=dict)
 
     def to_xml_attrs(self) -> Dict[str, str]:
@@ -94,6 +96,7 @@ class NodeSpec:
         if self.status: a['status'] = str(self.status)
         if self.resp: a['resp'] = self.resp
         if self.due: a['due'] = self.due
+        if self.location: a['location'] = self.location
         return a
     
     @classmethod
@@ -131,6 +134,7 @@ class NodeSpec:
             text=getattr(args, 'text', None),
             resp=getattr(args, 'resp', None),
             due=getattr(args, 'due', None),
+            location=getattr(args, 'location', None),
             attrs=attributes or {}
         )
 

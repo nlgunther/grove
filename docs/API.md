@@ -102,10 +102,11 @@ add --tag <n> [options]                  # full syntax
 | `--status <value>`    | Status                                      |
 | `--resp <n>`          | Responsible party                           |
 | `--due <date>`        | Due date — natural language or `YYYY-MM-DD` |
+| `-l / --location <s>` | Location string — shorthand for `-a location=<s>` |
 | `--parent <selector>` | Parent XPath or ID prefix (default: `/*`)   |
 | `--id <value>`        | Custom ID                                   |
 | `--id False`          | Disable auto-ID                             |
-| `-a <key=value>`      | Custom attribute (repeatable)               |
+| `-a <key=value>`      | Custom attribute (repeatable) — see below   |
 
 `--due` accepts all formats understood by `shared.dates.parse_date`: `today`, `tomorrow`, `+N`, weekday names, ISO, and US format.
 
@@ -114,8 +115,48 @@ add task "Review PR"
 add task "Deploy" --status active --resp alice --due tomorrow
 add task "Deploy" --due +3
 add task "Deploy" --due friday
-add --tag item --topic "Chair" -a colour=blue
+add task "Board meeting" --location "Room 4B"
+add task "Site visit" --due friday -l "123 Main St"
+add --tag item --topic "Chair" -a colour=blue -a size=large
 ```
+
+#### Custom attributes (`-a / --attr`)
+
+Use `-a key=value` to set any XML attribute not covered by the named flags. The flag is repeatable — one `-a` per attribute.
+
+| Rule | Detail |
+| ---- | ------ |
+| Syntax | `key=value` — the first `=` is the delimiter |
+| `=` in the value | Allowed: `-a expr=a=b` stores `expr="a=b"` |
+| Repeatable | Yes — each `-a` sets one attribute |
+| Duplicate keys | Last value wins — no error |
+| No `=` in item | Silently ignored |
+| Named flags preferred | Use `--topic`, `--status`, `--resp`, `--due` for those fields |
+
+```bash
+# Multiple attributes at creation
+add --tag item --topic "Chair" -a colour=blue -a size=large -a vendor=IKEA
+
+# Value containing '='
+add task "Config" -a expr=a=b+c          # stored as expr="a=b+c"
+
+# Update (or add) a custom attribute
+edit a3f7 -a priority=high
+
+# Remove a custom attribute (empty string — XML has no null)
+edit a3f7 -a priority=
+```
+
+**Querying custom attributes with XPath:**
+
+```bash
+list "//*[@priority]"                          # nodes that have the attribute
+list "//*[@priority='high']"                   # exact value match
+list "//*[contains(@colour,'bl')]"             # value contains substring
+list "//task[@priority='high'][@status='active']"  # combine filters
+```
+
+**Viewing attributes:** `show <id>` always displays every attribute. `list` suppresses well-known attributes by default; run `verbose` to toggle them on.
 
 ---
 
@@ -132,7 +173,7 @@ edit <selector> [options]
 | `--resp <n>`       | Update responsible party |
 | `--due <date>`     | Update due date          |
 | `--text <text>`    | Update body text         |
-| `-a <key=value>`   | Add / update attribute   |
+| `-a <key=value>`   | Add / update attribute (repeatable) — see [Custom attributes](#custom-attributes--a--attr) |
 | `--delete`         | Delete matched node(s)   |
 | `--id` / `--xpath` | Force interpretation     |
 

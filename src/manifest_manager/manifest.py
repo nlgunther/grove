@@ -52,6 +52,7 @@ import shutil
 try:
     from .manifest_core import ManifestRepository, NodeSpec, ManifestView, Validator
     from .storage import PasswordRequired
+    from .config import Config
 except ImportError as e:
     print(f"Critical Error: Missing core modules. {e}")
     sys.exit(1)
@@ -196,14 +197,15 @@ NODE OPERATIONS
       --topic "text"    Set topic attribute  
       --status <s>      Set status: active|done|pending|blocked|cancelled
       --id <value>      Custom ID (or 'False' to disable auto-ID)
-      -a key=value      Custom attribute (repeatable)
+      --location <s>    Location string (shorthand for -a location=<s>)
+      -a key=value      Custom attribute (repeatable; '=' allowed in value)
       "body text"       Text content of node
 
   edit <id_or_xpath>    Modify or delete nodes (auto-detects ID vs XPath)
       --text "new"      Update text content
       --topic "new"     Update topic attribute
       --status <s>      Update status
-      -a key=value      Add/update attribute
+      -a key=value      Add/update attribute (-a key= to remove)
       --delete          Remove matching nodes
       --id              Force ID interpretation
       --xpath           Force XPath interpretation
@@ -391,6 +393,7 @@ class ManifestShell(cmd.Cmd):
         super().__init__()
         self.repo = ManifestRepository()
         self._confirm_exit = False
+        self._verbose_attrs = False  # toggled by 'verbose' command
         try:
             from .dataframe_commands import add_dataframe_commands
             add_dataframe_commands(self)
@@ -445,29 +448,47 @@ class ManifestShell(cmd.Cmd):
 
     @staticmethod
     def _parse_attrs(attr_list: list | None) -> dict:
-        """Parse attribute list into dictionary.
-        
+        """Parse the repeated -a/--attr flags into an XML attribute dict.
+
+        argparse collects each `-a key=value` into a list; this method
+        turns that list into a dict suitable for passing to NodeSpec.
+
         Args:
-            attr_list: List like ['-a', 'k=v', '-a', 'k2=v2']
-            
+            attr_list: Values collected by argparse `action="append"`, e.g.
+                       ["colour=blue", "size=large"].  None when the flag
+                       was not supplied at all.
+
         Returns:
-            Dict like {'k': 'v', 'k2': 'v2'}
-            
-        Note:
-            - Items without '=' are silently ignored
-            - Later values override earlier for same key
-            - Uses split("=", 1) to allow '=' in values
+            Dict mapping attribute names to values, e.g.
+            {"colour": "blue", "size": "large"}.
+
+        Behaviour worth noting:
+        - `=` in the value is fine: `expr=a=b` → {"expr": "a=b"}.
+          split("=", 1) ensures only the first `=` is the delimiter.
+        - Duplicate keys: last value wins — `colour=red -a colour=blue`
+          yields {"colour": "blue"}.  This lets callers override earlier
+          flags without an error.
+        - No `=` in the item: silently skipped.  argparse never produces
+          this from well-formed `-a key=value` input, but guards against
+          programmatic misuse.
+
+        Example:
+            _parse_attrs(["colour=blue", "size=large"])
+            # → {"colour": "blue", "size": "large"}
+
+            _parse_attrs(["expr=a=b+c"])
+            # → {"expr": "a=b+c"}
         """
         if not attr_list:
             return {}
-        
+
         attrs = {}
         for item in attr_list:
             if "=" not in item:
-                continue  # Skip malformed items
+                continue  # guard: well-formed input always has '='
             key, value = item.split("=", 1)
             attrs[key] = value
-        
+
         return attrs
 
     # --- Commands ---
@@ -672,6 +693,7 @@ class ManifestShell(cmd.Cmd):
           --id <value>         Custom ID (default: auto-generated 8-char hex)
           --id False           Disable auto-ID generation
           --resp <n>           Responsible party (v3.4)
+          --location <s>       Location string; shorthand for -a location=<s>
         
         Smart parent detection (v3.4.1):
           --parent "//project"         XPath (has /)
@@ -695,7 +717,11 @@ class ManifestShell(cmd.Cmd):
         p.add_argument("--resp", help="Responsible party")
         p.add_argument("--due", help="Due date (YYYY-MM-DD format)")
         p.add_argument("--id", dest="node_id", help="ID (or 'False' to disable auto-ID)")
-        p.add_argument("-a", "--attr", action="append", help="k=v attrs")
+        p.add_argument("-l", "--location", help="Location string (shorthand for -a location=<value>)")
+        # -a/--attr sets arbitrary XML attributes not covered by the named flags
+        # above.  Repeatable: each -a key=value adds one attribute.
+        # See _parse_attrs for full semantics (= in values, duplicate handling).
+        p.add_argument("-a", "--attr", action="append", help="key=value — repeatable; sets arbitrary XML attributes")
         p.add_argument("text", nargs="?", help="Body text")
 
         def _run():
@@ -753,7 +779,7 @@ class ManifestShell(cmd.Cmd):
                 print(f"✓ Added node with ID: {node_id}")
                 
                 # Show details if attributes were set
-                if args.topic or args.status or args.resp or args.due:
+                if args.topic or args.status or args.resp or args.due or args.location:
                     if args.topic:
                         print(f"  topic: {args.topic}")
                     if args.status:
@@ -762,6 +788,8 @@ class ManifestShell(cmd.Cmd):
                         print(f"  resp: {args.resp}")
                     if args.due:
                         print(f"  due: {args.due}")
+                    if args.location:
+                        print(f"  location: {args.location}")
             else:
                 print(result.message)
         
@@ -1382,7 +1410,10 @@ class ManifestShell(cmd.Cmd):
         p.add_argument("--resp", help="Responsible party")
         p.add_argument("--due", help="Due date (YYYY-MM-DD format)")
         p.add_argument("--text", help="New body text")
-        p.add_argument("-a", "--attr", action="append", help="k=v attributes")
+        # -a/--attr adds or updates arbitrary XML attributes (not just the named
+        # ones above).  Repeatable.  To remove an attribute, set it to an empty
+        # string: -a key=   (XML has no null; empty string is the convention).
+        p.add_argument("-a", "--attr", action="append", help="key=value — repeatable; adds/updates arbitrary XML attributes")
         p.add_argument("--delete", action="store_true", help="Delete node")
         
         def _run():
@@ -1653,6 +1684,15 @@ class ManifestShell(cmd.Cmd):
                     print(f"Tip: Use 'save {original_filepath}' to write back to original file.")
 
         self._exec(_run)
+
+    def default(self, line):
+        # cmd.Cmd dispatches via do_<word>, so hyphens in command names
+        # (export-calendar, export-scheduler) never resolve — Python method
+        # names can't contain hyphens.  Translate and retry before giving up.
+        first, _, rest = line.partition(' ')
+        if '-' in first:
+            return self.onecmd(first.replace('-', '_') + (' ' + rest if rest else ''))
+        print(f'*** Unknown syntax: {line}')
 
     def do_cheatsheet(self, _):
         """Display comprehensive command reference."""
