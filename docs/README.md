@@ -153,7 +153,12 @@ grove/
 │   │       └── ics_writer.py       # ICS calendar export
 │   ├── manifest_manager/           # Manifest Manager package
 │   │   ├── __init__.py
-│   │   ├── manifest.py             # CLI shell
+│   │   ├── manifest.py             # Entry point — ManifestShell, CHEATSHEET, main()
+│   │   ├── shell_base.py           # SafeParser, ShellBase helpers
+│   │   ├── shell_file.py           # FileCommands mixin (load/save/backup…)
+│   │   ├── shell_node.py           # NodeCommands mixin (add/edit/delete…)
+│   │   ├── shell_search.py         # SearchCommands mixin (list/find/grep…)
+│   │   ├── shell_export.py         # ExportCommands mixin (export-calendar)
 │   │   ├── manifest_core.py        # Core repository logic
 │   │   ├── storage.py              # XML / 7z storage
 │   │   ├── calendar.py             # Calendar export helpers
@@ -164,7 +169,11 @@ grove/
 │   └── smart_scheduler/            # Smart Scheduler package
 │       ├── __init__.py
 │       ├── __main__.py
-│       ├── cli.py                  # Interactive CLI
+│       ├── cli.py                  # Entry point — CLI class, _COMMANDS, main()
+│       ├── cli_tasks.py            # list, show, cleanup, new, add, edit, delete, search
+│       ├── cli_data.py             # import-json/manifest, export, export-json
+│       ├── cli_maintenance.py      # config, backup, restore, maintenance
+│       ├── cli_help.py             # help
 │       ├── config.py               # Data dir / preferences
 │       ├── models.py               # Task, Project, Contact, TaskStatus
 │       ├── services/
