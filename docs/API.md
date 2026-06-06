@@ -95,18 +95,18 @@ add <shortcut> ["Title"] [options]      # shortcut syntax
 add --tag <n> [options]                  # full syntax
 ```
 
-| Option                | Description                                 |
-| --------------------- | ------------------------------------------- |
-| `--tag <n>`           | Tag name (required in full syntax)          |
-| `--topic <text>`      | Topic / title attribute                     |
-| `--status <value>`    | Status                                      |
-| `--resp <n>`          | Responsible party                           |
-| `--due <date>`        | Due date — natural language or `YYYY-MM-DD` |
+| Option                | Description                                       |
+| --------------------- | ------------------------------------------------- |
+| `--tag <n>`           | Tag name (required in full syntax)                |
+| `--topic <text>`      | Topic / title attribute                           |
+| `--status <value>`    | Status                                            |
+| `--resp <n>`          | Responsible party                                 |
+| `--due <date>`        | Due date — natural language or `YYYY-MM-DD`       |
 | `-l / --location <s>` | Location string — shorthand for `-a location=<s>` |
-| `--parent <selector>` | Parent XPath or ID prefix (default: `/*`)   |
-| `--id <value>`        | Custom ID                                   |
-| `--id False`          | Disable auto-ID                             |
-| `-a <key=value>`      | Custom attribute (repeatable) — see below   |
+| `--parent <selector>` | Parent XPath or ID prefix (default: `/*`)         |
+| `--id <value>`        | Custom ID                                         |
+| `--id False`          | Disable auto-ID                                   |
+| `-a <key=value>`      | Custom attribute (repeatable) — see below         |
 
 `--due` accepts all formats understood by `shared.dates.parse_date`: `today`, `tomorrow`, `+N`, weekday names, ISO, and US format.
 
@@ -124,13 +124,13 @@ add --tag item --topic "Chair" -a colour=blue -a size=large
 
 Use `-a key=value` to set any XML attribute not covered by the named flags. The flag is repeatable — one `-a` per attribute.
 
-| Rule | Detail |
-| ---- | ------ |
-| Syntax | `key=value` — the first `=` is the delimiter |
-| `=` in the value | Allowed: `-a expr=a=b` stores `expr="a=b"` |
-| Repeatable | Yes — each `-a` sets one attribute |
-| Duplicate keys | Last value wins — no error |
-| No `=` in item | Silently ignored |
+| Rule                  | Detail                                                        |
+| --------------------- | ------------------------------------------------------------- |
+| Syntax                | `key=value` — the first `=` is the delimiter                  |
+| `=` in the value      | Allowed: `-a expr=a=b` stores `expr="a=b"`                    |
+| Repeatable            | Yes — each `-a` sets one attribute                            |
+| Duplicate keys        | Last value wins — no error                                    |
+| No `=` in item        | Silently ignored                                              |
 | Named flags preferred | Use `--topic`, `--status`, `--resp`, `--due` for those fields |
 
 ```bash
@@ -166,16 +166,16 @@ list "//task[@priority='high'][@status='active']"  # combine filters
 edit <selector> [options]
 ```
 
-| Option             | Description              |
-| ------------------ | ------------------------ |
-| `--topic <text>`   | Update topic             |
-| `--status <value>` | Update status            |
-| `--resp <n>`       | Update responsible party |
-| `--due <date>`     | Update due date          |
-| `--text <text>`    | Update body text         |
+| Option             | Description                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| `--topic <text>`   | Update topic                                                                               |
+| `--status <value>` | Update status                                                                              |
+| `--resp <n>`       | Update responsible party                                                                   |
+| `--due <date>`     | Update due date                                                                            |
+| `--text <text>`    | Update body text                                                                           |
 | `-a <key=value>`   | Add / update attribute (repeatable) — see [Custom attributes](#custom-attributes--a--attr) |
-| `--delete`         | Delete matched node(s)   |
-| `--id` / `--xpath` | Force interpretation     |
+| `--delete`         | Delete matched node(s)                                                                     |
+| `--id` / `--xpath` | Force interpretation                                                                       |
 
 ---
 
