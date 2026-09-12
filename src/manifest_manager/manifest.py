@@ -28,7 +28,7 @@ Features:
     - In-memory sidecar rebuild command (v3.4)
     - Encrypted backups via 7z with password protection
     - Transaction support with automatic rollback on errors
-    - Multiple view formats (tree, table)
+    - Multiple view formats (tree, table, email)
     - Configuration files for customization
     - Merge multiple manifest files
     - Wrap top-level nodes under new containers
@@ -228,7 +228,11 @@ SEARCHING & VIEWING
   list [xpath]          Display nodes (default: /* = all top-level)
       --style tree      Hierarchical view (default)
       --style table     Tabular view
+      --style email     Human-readable prose, no IDs — for pasting into an email
       --depth N         Limit tree depth
+
+  show <id_or_xpath>    Show a single node in detail
+      --style email     Human-readable prose, no IDs — for pasting into an email
 
   autoid                Add IDs to elements that lack them
       --overwrite       Replace ALL existing IDs
@@ -1132,13 +1136,19 @@ class ManifestShell(cmd.Cmd):
             print("Tip: Use 'autoid' to add IDs to elements")
 
     def do_list(self, arg):
-        """View data: list [id_or_xpath] [--style tree|table] [--depth N]
+        """View data: list [id_or_xpath] [--style tree|table|email] [--depth N]
         
         Smart detection:
             - 8-char hex (e.g., 'a3f7b2c1') → Exact ID match
             - Shorter hex (e.g., 'a3f') → ID prefix search (shows all matches)
             - XPath syntax (e.g., '//task') → XPath query
             - Use --xpath to force XPath, --id to force ID
+        
+        Styles:
+            tree   Structural view with IDs and raw attributes (default)
+            table  Tabular columns (ID/Topic/Tag/Status/Resp)
+            email  Human-readable prose with numbered items and no IDs —
+                   safe to copy straight into an email
         
         Examples:
             list                              # Show entire tree
@@ -1147,6 +1157,7 @@ class ManifestShell(cmd.Cmd):
             list "//task"                     # Show all tasks (XPath)
             list "//task[@status='done']"     # XPath query
             list --id BUG-123                 # Force ID interpretation
+            list a3f --style email            # Human-friendly view to paste into an email
         """
         p = SafeParser(prog="list")  # ← This line needs proper indentation!
         p.add_argument("selector", nargs="?", default="/*", 
@@ -1155,7 +1166,7 @@ class ManifestShell(cmd.Cmd):
                     help="Force XPath interpretation")
         p.add_argument("--id", dest="force_id", action="store_true",
                     help="Force ID interpretation")
-        p.add_argument("--style", default="tree", choices=["tree", "table"])
+        p.add_argument("--style", default="tree", choices=["tree", "table", "email"])
         p.add_argument("--depth", type=int, help="Limit tree depth")
         
         def _run():
@@ -1610,20 +1621,27 @@ class ManifestShell(cmd.Cmd):
         return self.do_delete(arg)
 
     def do_show(self, arg):
-        """Show a single node in detail: show <id_or_xpath>
+        """Show a single node in detail: show <id_or_xpath> [--style tree|email]
 
         Displays full attributes and text of the matched node,
         plus a tree view of its children.
 
+        Styles:
+            tree   Raw tag/attributes plus a tree view of children (default)
+            email  Human-readable prose for the node and its descendants —
+                   safe to copy straight into an email
+
         Examples:
-            show a3f              # Show node matching ID prefix
-            show a3f7b2c1         # Show node by exact ID
-            show "//project[1]"   # Show first project
+            show a3f                    # Show node matching ID prefix
+            show a3f7b2c1                # Show node by exact ID
+            show "//project[1]"          # Show first project
+            show a3f --style email       # Human-friendly view to paste into an email
         """
         p = SafeParser(prog="show", description="Show node details")
         p.add_argument("selector", help="Element ID/prefix or XPath")
         p.add_argument("--xpath", dest="force_xpath", action="store_true")
         p.add_argument("--id", dest="force_id", action="store_true")
+        p.add_argument("--style", default="tree", choices=["tree", "email"])
 
         def _run():
             args = p.parse_args(shlex.split(arg))
@@ -1643,6 +1661,11 @@ class ManifestShell(cmd.Cmd):
                 return
 
             elem = elements[0]
+
+            if args.style == "email":
+                print(ManifestView.render([elem], "email"))
+                return
+
             print()
             print(f"  Tag:    {elem.tag}")
             for attr, val in elem.attrib.items():

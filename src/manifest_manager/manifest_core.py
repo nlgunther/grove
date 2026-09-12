@@ -813,7 +813,7 @@ class ManifestView:
         
         Args:
             nodes: List of XML elements to render
-            style: "tree" or "table" rendering style
+            style: "tree", "table", or "email" rendering style
             max_depth: Maximum depth to traverse (None = unlimited)
             hide_attrs: If True, suppress _HIDDEN_ATTRS in output (default).
                         Pass False (via 'verbose' command) to show all attributes.
@@ -823,6 +823,7 @@ class ManifestView:
         """
         if not nodes: return "No data."
         if style == "table": return ManifestView._table(nodes, max_depth)
+        if style == "email": return ManifestView._email(nodes, max_depth)
         return ManifestView._tree(nodes, max_depth, hide_attrs)
 
     @staticmethod
@@ -901,3 +902,74 @@ class ManifestView:
         
         return "\n".join([fmt.format(**{c:c for c in cols}), "-"*sum(widths.values()), 
                           *[fmt.format(**r) for r in rows]])
+
+    @staticmethod
+    def _email(nodes, max_depth: int = None) -> str:
+        """Human-friendly prose rendering, suitable for pasting into an email.
+
+        Nodes carrying a ``topic`` attribute but no ``name`` and no text are
+        treated as section headings; everything else is rendered as a
+        numbered line under its nearest heading, using ``name`` (falling
+        back to ``topic``/tag) as the item's title and its text as the
+        description. Recognized attributes (status/due/resp) are folded
+        into a short parenthetical; any other attributes are shown the
+        same way so nothing is silently dropped. IDs are never shown —
+        this style is for humans, not for later lookup.
+        """
+        _KNOWN_ATTRS = {"id", "topic", "name", "status", "due", "resp"}
+
+        def _is_heading(node) -> bool:
+            topic = node.get("topic")
+            name = node.get("name")
+            text = (node.text or "").strip()
+            return bool(topic) and not name and not text
+
+        def _title_case(label: str) -> str:
+            words = label.replace("_", " ").replace("-", " ")
+            return words.title() if words == words.lower() else words
+
+        def _details(node) -> str:
+            status, due, resp = node.get("status"), node.get("due"), node.get("resp")
+            parts = [p for p in (
+                status,
+                f"due {due}" if due else None,
+                f"@{resp}" if resp else None,
+            ) if p]
+            parts += [f"{k}: {v}" for k, v in node.attrib.items() if k not in _KNOWN_ATTRS]
+            return f" ({'; '.join(parts)})" if parts else ""
+
+        lines = []
+
+        def _render_heading(node, depth):
+            title = _title_case(node.get("topic"))
+            lines.append("")
+            lines.append(title)
+            lines.append(("=" if depth == 0 else "-") * len(title))
+            counter = [1]
+            for child in node:
+                _render_item(child, depth + 1, counter)
+
+        def _render_item(node, depth, counter):
+            if max_depth is not None and depth > max_depth:
+                return
+            if _is_heading(node):
+                _render_heading(node, depth)
+                return
+            label = node.get("name") or node.get("topic") or node.tag
+            text = (node.text or "").strip()
+            indent = "  " * max(depth - 1, 0)
+            line = f"{indent}{counter[0]}. {label}{_details(node)}"
+            if text:
+                line += f" — {text}"
+            lines.append(line)
+            counter[0] += 1
+            for child in node:
+                _render_item(child, depth + 1, counter)
+
+        for n in nodes:
+            if _is_heading(n):
+                _render_heading(n, 0)
+            else:
+                _render_item(n, 0, [1])
+
+        return "\n".join(lines).strip("\n")
