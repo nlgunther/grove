@@ -9,6 +9,7 @@
 ```bash
 manifest       # Manifest Manager interactive shell
 scheduler      # Smart Scheduler interactive shell
+text2ics       # Text-to-ICS converter (one-shot CLI, not a shell)
 ```
 
 ---
@@ -347,6 +348,28 @@ config reset
 - Tags have no spaces: `--tags urgent,bug` not `urgent, bug`
 
 ---
+
+---
+
+# TEXT TO ICS
+
+```bash
+text2ics "dentist tomorrow at 3pm" -o dentist.ics    # single event -> file
+text2ics "lunch with bob today at noon"              # no -o -> prints to stdout
+
+text2ics -o week.ics <<EOF                           # stdin, one event per line
+dentist tomorrow at 3pm
+team sync monday 9:30am
+EOF
+
+text2ics --tz America/New_York "..." -o out.ics       # non-default reference tz
+text2ics --extractor llm "..." -o out.ics             # Claude-backed, needs ANTHROPIC_API_KEY
+```
+
+Heuristic backend (default) needs an explicit date word per line
+(today/tomorrow/+N/weekday/ISO/US date) — no date, no guess, it errors.
+
+Import into Google Calendar: Settings -> Import & Export -> Import.
 
 ---
 

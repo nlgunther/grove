@@ -13,6 +13,8 @@ Grove is a unified command-line productivity suite combining two complementary t
 
 **Smart Scheduler v2.0** — flat, project-oriented task manager with natural language date parsing, status workflows, and JSON storage. Optimized for daily task tracking with fast ID-based editing.
 
+**Text-to-ICS Converter** — a third CLI, `text2ics`, that turns free text into a Google-Calendar-ready `.ics` file (a heuristic backend by default, an optional Claude-backed extractor for messier input).
+
 Both tools share a common infrastructure library (`shared`) for ID generation, file locking, calendar export, date parsing, and cross-tool integration.
 
 ---
@@ -32,9 +34,10 @@ cd grove
 
 pip install -e .
 
-# Verify both CLIs are available
+# Verify all three CLIs are available
 manifest --help
 scheduler --help
+text2ics --help
 ```
 
 ### Configuration

@@ -13,9 +13,10 @@
 4. [Smart Scheduler Commands](#smart-scheduler-commands)
 5. [Natural Language Date Parsing](#natural-language-date-parsing)
 6. [Cross-Tool Integration](#cross-tool-integration)
-7. [Shared Infrastructure](#shared-infrastructure)
-8. [Python API](#python-api)
-9. [Configuration](#configuration)
+7. [Text-to-ICS Converter](#text-to-ics-converter)
+8. [Shared Infrastructure](#shared-infrastructure)
+9. [Python API](#python-api)
+10. [Configuration](#configuration)
 
 ---
 
@@ -718,6 +719,52 @@ Config is cached per-process; restart the shell after editing.
 
 ---
 
+## Text-to-ICS Converter
+
+Turns free text into a Google-Calendar-ready `.ics` file. A third CLI
+alongside `manifest`/`scheduler`, installed from the same package.
+
+```
+text2ics [text] [-o OUTPUT] [--calendar-name NAME] [--tz TZ] [--extractor {heuristic,llm}]
+```
+
+| Option | Description |
+| --- | --- |
+| `text` | Event text. Omit to read from stdin (one event per line). |
+| `-o, --output` | Output `.ics` path. Omit to print to stdout. |
+| `--calendar-name` | `X-WR-CALNAME` shown in the calendar app's import dialog. Default: `text-to-ics`. |
+| `--tz` | Reference timezone for resolving relative phrases. Default: `America/Los_Angeles`. |
+| `--extractor` | `heuristic` (default, no network) or `llm` (Claude-backed, handles messier text). |
+
+The **heuristic** extractor is offline and deterministic: one event per
+non-blank input line, each line needs an explicit date phrase
+(`today`/`tomorrow`/`+N`/a weekday name/an ISO or US date); time is
+optional and defaults to 9:00 AM. A line with no recognizable date raises
+rather than guessing.
+
+The **llm** extractor calls the Claude API for free-form/multi-event text
+that doesn't fit the one-line-per-event contract. Requires
+`pip install "grove[text2ics]"` and `ANTHROPIC_API_KEY` set.
+
+```bash
+text2ics "dentist tomorrow at 3pm" -o dentist.ics
+
+text2ics -o week.ics <<EOF
+dentist tomorrow at 3pm
+team sync monday 9:30am
+lunch with bob +2
+EOF
+
+text2ics --extractor llm "call mom sometime this weekend, and remind me to renew my passport before the Munich trip in June" -o events.ics
+```
+
+Each event's UID is a deterministic hash of title + start time (see
+[`text_to_ics.adapter`](#text_to_icsadapter) below), so re-importing the
+same `.ics` into Google Calendar updates the existing event rather than
+duplicating it.
+
+---
+
 ## Shared Infrastructure
 
 ### `shared.dates`
@@ -861,6 +908,31 @@ from smart_scheduler.services.maintenance_service import MaintenanceService
 maint = MaintenanceService(storage)
 backup_path = maint.backup("snap", compress=True)
 maint.restore(str(backup_path))
+```
+
+### `text_to_ics.adapter`
+
+```python
+from text_to_ics.adapter import to_calendar_event
+from text_to_ics.models import EventSpec
+from datetime import datetime, timezone
+
+spec = EventSpec(
+    title="Dentist",
+    start=datetime(2026, 6, 1, 15, 0, tzinfo=timezone.utc),
+)
+event = to_calendar_event(spec)   # a shared.calendar.ics_writer.CalendarEvent
+```
+
+### `text_to_ics.heuristic_extractor`
+
+```python
+from text_to_ics.heuristic_extractor import HeuristicExtractor
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+reference = datetime.now(ZoneInfo("America/Los_Angeles"))
+specs = HeuristicExtractor().extract("dentist tomorrow at 3pm", reference=reference)
 ```
 
 ### `manifest_bridge`
