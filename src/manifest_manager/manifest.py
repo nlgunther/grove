@@ -21,7 +21,6 @@ Example Session:
     (myproject.xml) export-calendar "//task[@due]" tasks.ics
     (myproject.xml) save backup.7z
 
-<<<<<<< HEAD
 Module layout (v3.6 split):
     manifest.py      — thin entry point (this file)
     shell_base.py    — SafeParser, ShellBase helpers
@@ -29,37 +28,23 @@ Module layout (v3.6 split):
     shell_node.py    — NodeCommands  (add, edit, delete, move, wrap, autoid, rebuild)
     shell_search.py  — SearchCommands (list, find, grep, search, show, verbose)
     shell_export.py  — ExportCommands (export-calendar)
-=======
-Features:
-    - XPath-based querying with CSS selector support
-    - Fast ID lookups via sidecar index (O(1))
-    - Smart edit: auto-detects ID vs XPath
-    - ID prefix matching with interactive selection (v3.4)
-    - In-memory sidecar rebuild command (v3.4)
-    - Encrypted backups via 7z with password protection
-    - Transaction support with automatic rollback on errors
-    - Multiple view formats (tree, table, email)
-    - Configuration files for customization
-    - Merge multiple manifest files
-    - Wrap top-level nodes under new containers
-
-Security:
-    - Password retry with maximum attempt limits
-    - Path validation prevents injection attacks
-    - XML validation prevents malformed documents
-    - Unsaved changes warning on exit
->>>>>>> a4177c4af780fc219d37a411f7cfae2bd2f2ac6d
 """
 
 import sys
 import cmd
+import shlex
+import argparse
+import getpass
+import os
+import shutil
 
 # --- Imports (re-exported here so existing patch targets remain valid) ---
 try:
     from .shell_base import (
         ShellBase, SafeParser, ParserControl,
         ManifestRepository, NodeSpec, ManifestView, Validator,
-        PasswordRequired, Config,
+        PasswordRequired, Config, _is_id_selector,
+        generate_bkp_name, generate_timestamped_name, backup_sidecar,
     )
     from .shell_file import FileCommands
     from .shell_node import NodeCommands
@@ -304,9 +289,6 @@ class ManifestShell(FileCommands, NodeCommands, SearchCommands, ExportCommands,
         except ImportError:
             pass  # DataFrame support is optional
 
-<<<<<<< HEAD
-    # --- Shell-level commands (not delegated to a mixin) ---
-=======
     def _exec(self, func):
         """Safe execution wrapper."""
         try: func()
@@ -1610,7 +1592,6 @@ class ManifestShell(FileCommands, NodeCommands, SearchCommands, ExportCommands,
                     print(f"Tip: Use 'save {original_filepath}' to write back to original file.")
 
         self._exec(_run)
->>>>>>> a4177c4af780fc219d37a411f7cfae2bd2f2ac6d
 
     def default(self, line):
         # cmd.Cmd dispatches via do_<word>, so hyphens in command names

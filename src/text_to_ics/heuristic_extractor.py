@@ -19,10 +19,14 @@ from datetime import date, datetime, time
 from shared.dates import parse_date
 from .models import EventSpec
 
+# "+2" doesn't get a \b before the "+" (a space and a "+" are both
+# non-word characters, so there's no word-boundary transition between
+# them) -- so it's pulled out of the \b(...)\b group as its own
+# alternative rather than silently failing to match.
 _DATE_TOKEN_RE = re.compile(
-    r"\b(today|tomorrow|yesterday|\+\d+|"
+    r"\b(?:today|tomorrow|yesterday|"
     r"monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
-    r"\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})\b",
+    r"\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})\b|\+\d+",
     re.IGNORECASE,
 )
 _TIME_RE = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", re.IGNORECASE)
