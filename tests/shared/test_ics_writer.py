@@ -64,3 +64,32 @@ def test_datetime_not_deprecated():
     ics = event.to_ics()
     assert "DTSTART:" in ics
     assert "Z" in ics  # UTC indicator
+
+
+def test_timed_event_with_utc_datetime_gets_z_suffix():
+    """A tz-aware UTC datetime must produce an unambiguous DTSTART, not a
+    floating time Google Calendar has no fixed instant for."""
+    event = CalendarEvent(
+        uid="tz_test",
+        title="Standup",
+        start_date=datetime(2026, 6, 1, 17, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 1, 17, 30, tzinfo=timezone.utc),
+    )
+
+    ics = event.to_ics()
+    assert "DTSTART:20260601T170000Z" in ics
+    assert "DTEND:20260601T173000Z" in ics
+
+
+def test_timed_event_with_naive_datetime_stays_floating():
+    """A naive datetime is emitted as floating local time on purpose —
+    no Z suffix, since there's no timezone to convert from."""
+    event = CalendarEvent(
+        uid="naive_test",
+        title="Standup",
+        start_date=datetime(2026, 6, 1, 9, 0),
+    )
+
+    ics = event.to_ics()
+    assert "DTSTART:20260601T090000" in ics
+    assert "DTSTART:20260601T090000Z" not in ics

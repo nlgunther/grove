@@ -13,14 +13,18 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[project.optional-dependencies]
+text2ics = ["anthropic>=0.40.0"]
+
 [project.scripts]
 manifest  = "manifest_manager.__main__:main"
 mnft  = "manifest_manager.__main__:main"
 scheduler = "smart_scheduler.__main__:main"
 schd = "smart_scheduler.__main__:main"
+text2ics = "text_to_ics.__main__:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]  # Auto-discovers manifest_manager, smart_scheduler, shared
+where = ["src"]  # Auto-discovers manifest_manager, smart_scheduler, shared, text_to_ics
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

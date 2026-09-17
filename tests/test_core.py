@@ -193,3 +193,38 @@ def test_manifest_view_depth_zero(repo):
     
     assert "Root" in output
     assert "Child" not in output  # Child should be hidden
+
+def test_manifest_view_email_style_hides_ids_and_uses_name(repo):
+    """Email style renders readable prose: headings from topic, numbered
+    items from name/text, and never leaks raw IDs."""
+    from manifest_manager.manifest_core import ManifestView
+
+    project = etree.SubElement(repo.root, "project", id="p1", topic="restaurants")
+    city = etree.SubElement(project, "city", id="c1", topic="san francisco")
+    task = etree.SubElement(city, "task", id="t1", name="Kin Kaho", status="active")
+    task.text = "Incredible Thai food near Powell Street BART."
+
+    output = ManifestView.render([project], style="email")
+
+    assert "Restaurants" in output or "restaurants" in output
+    assert "San Francisco" in output or "san francisco" in output
+    assert "Kin Kaho" in output
+    assert "Incredible Thai food near Powell Street BART." in output
+    assert "1." in output
+    assert "p1" not in output
+    assert "c1" not in output
+    assert "t1" not in output
+
+
+def test_manifest_view_email_style_shows_extra_attrs(repo):
+    """Attributes without dedicated handling still surface, just phrased
+    as 'key: value' instead of being dropped."""
+    from manifest_manager.manifest_core import ManifestView
+
+    project = etree.SubElement(repo.root, "project", id="p1", topic="restaurants")
+    task = etree.SubElement(project, "task", id="t1", name="Kin Kaho", cuisine="thai")
+    task.text = "Great food."
+
+    output = ManifestView.render([project], style="email")
+
+    assert "cuisine: thai" in output

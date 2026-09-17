@@ -37,15 +37,13 @@ class CalendarEvent:
                 lines.append(f"DTEND;VALUE=DATE:{end_str}")
         else:
             if isinstance(self.start_date, datetime):
-                dt_str = self.start_date.strftime('%Y%m%dT%H%M%S')
-                lines.append(f"DTSTART:{dt_str}")
+                lines.append(f"DTSTART:{self._format_datetime(self.start_date)}")
             else:
                 lines.append(f"DTSTART;VALUE=DATE:{self.start_date.strftime('%Y%m%d')}")
 
             if self.end_date:
                 if isinstance(self.end_date, datetime):
-                    end_str = self.end_date.strftime('%Y%m%dT%H%M%S')
-                    lines.append(f"DTEND:{end_str}")
+                    lines.append(f"DTEND:{self._format_datetime(self.end_date)}")
                 else:
                     lines.append(f"DTEND;VALUE=DATE:{self.end_date.strftime('%Y%m%d')}")
             
@@ -60,6 +58,23 @@ class CalendarEvent:
             
         lines.append("END:VEVENT")
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_datetime(dt: datetime) -> str:
+        """Format a timed DTSTART/DTEND value.
+
+        A tz-aware datetime is converted to UTC and given the ``Z``
+        suffix RFC 5545 requires — this is what earlier only happened
+        to DTSTAMP, leaving timed DTSTART/DTEND as an ambiguous
+        "floating" time that Google Calendar has no fixed instant for.
+        A naive datetime is emitted as floating local time on purpose:
+        callers that care about a specific timezone should localize
+        (or convert to UTC) before constructing the event.
+        """
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc)
+            return dt.strftime('%Y%m%dT%H%M%SZ')
+        return dt.strftime('%Y%m%dT%H%M%S')
 
     @staticmethod
     def _escape(text: str) -> str:

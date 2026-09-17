@@ -19,7 +19,7 @@ All other input returns None; callers decide how to handle it.
 """
 
 from __future__ import annotations
-from datetime import datetime, timedelta
+from datetime import date as _date, datetime, timedelta
 from typing import Optional
 
 
@@ -35,11 +35,15 @@ def today_str() -> str:
     return datetime.now().date().isoformat()
 
 
-def parse_date(date_str: Optional[str]) -> Optional[str]:
+def parse_date(date_str: Optional[str], *, today: Optional["_date"] = None) -> Optional[str]:
     """Parse a natural language or formatted date string to ISO 8601.
 
     Args:
         date_str: Input date expression (case-insensitive).
+        today: Reference date for relative phrases ("tomorrow", "+3",
+            a weekday name). Defaults to the real current date — pass
+            this explicitly for deterministic tests or to resolve
+            relative phrasing against a date other than "now".
 
     Returns:
         ISO date string ``"YYYY-MM-DD"``, or ``None`` if unrecognised.
@@ -59,7 +63,7 @@ def parse_date(date_str: Optional[str]) -> Optional[str]:
         return None
 
     date_str = str(date_str).strip().lower()
-    today = datetime.now().date()
+    today = today or datetime.now().date()
 
     # Relative keywords
     if date_str == "today":
