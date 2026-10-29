@@ -9,7 +9,8 @@ than a lesser version of it.
 
 Contract: one event per non-blank input line. Each line must contain a
 recognizable date phrase (today/tomorrow/+N/a weekday name/an ISO or
-US-format date); a time-of-day phrase ("3pm", "15:00", "noon",
+US-format date, or compact YYYYMMDD); a time-of-day phrase ("3pm",
+"15:00", "12:55", "noon",
 "midnight") is optional and defaults to 9:00 AM local time when absent.
 Anything else in the line becomes the title.
 """
@@ -26,10 +27,15 @@ from .models import EventSpec
 _DATE_TOKEN_RE = re.compile(
     r"\b(?:today|tomorrow|yesterday|"
     r"monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
-    r"\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})\b|\+\d+",
+    r"\d{4}-\d{2}-\d{2}|\d{8}|\d{1,2}/\d{1,2}/\d{4})\b|\+\d+",
     re.IGNORECASE,
 )
-_TIME_RE = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", re.IGNORECASE)
+# "3pm" / "9:30am" (12-hour) or "15:00" / "12:55" (24-hour, colon required so
+# a bare number is never mistaken for a time).
+_TIME_RE = re.compile(
+    r"\b(\d{1,2})(?::(\d{2})(?!\d)|(?=\s*(?:am|pm)\b))\s*(am|pm)?\b",
+    re.IGNORECASE,
+)
 _NOON_RE = re.compile(r"\bnoon\b", re.IGNORECASE)
 _MIDNIGHT_RE = re.compile(r"\bmidnight\b", re.IGNORECASE)
 
@@ -52,9 +58,11 @@ class HeuristicExtractor:
         if not date_match:
             raise ValueError(
                 f"No recognizable date in: {line!r} "
-                "(try today/tomorrow/+N/a weekday name/an ISO or US date)"
+                "(try today/tomorrow/+N/a weekday name/an ISO, compact or US date)"
             )
         iso_date = parse_date(date_match.group(0), today=reference.date())
+        if iso_date is None:
+            raise ValueError(f"Invalid date {date_match.group(0)!r} in: {line!r}")
         event_date = date.fromisoformat(iso_date)
 
         event_time, time_span = self._extract_time(line)
@@ -66,11 +74,13 @@ class HeuristicExtractor:
     def _extract_time(self, line: str):
         m = _TIME_RE.search(line)
         if m:
-            hour = int(m.group(1)) % 12
-            minute = int(m.group(2) or 0)
-            if m.group(3).lower() == "pm":
-                hour += 12
-            return time(hour, minute), m.span()
+            hour, minute, meridiem = int(m.group(1)), int(m.group(2) or 0), m.group(3)
+            if meridiem:  # 12-hour clock: 12am -> 0, 12pm -> 12
+                hour = hour % 12 + (12 if meridiem.lower() == "pm" else 0)
+            try:
+                return time(hour, minute), m.span()
+            except ValueError:
+                raise ValueError(f"Invalid time {m.group(0)!r} in: {line!r}") from None
         m = _NOON_RE.search(line)
         if m:
             return time(12, 0), m.span()

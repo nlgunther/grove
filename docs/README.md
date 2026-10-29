@@ -24,7 +24,7 @@ Both tools share a common infrastructure library (`shared`) for ID generation, f
 ### Prerequisites
 
 - Python 3.8+
-- Dependencies: `lxml`, `py7zr`, `pyyaml`
+- Dependencies: `lxml`, `py7zr`, `pyyaml` (plus `tzdata` on Windows, installed automatically)
 
 ### Setup
 
@@ -32,7 +32,7 @@ Both tools share a common infrastructure library (`shared`) for ID generation, f
 git clone <repository-url>
 cd grove
 
-pip install -e .
+pip install -e .          # or, with uv: uv sync, then prefix commands with `uv run`
 
 # Verify all three CLIs are available
 manifest --help

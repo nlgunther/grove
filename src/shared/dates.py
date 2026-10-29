@@ -19,6 +19,7 @@ All other input returns None; callers decide how to handle it.
 """
 
 from __future__ import annotations
+import re
 from datetime import date as _date, datetime, timedelta
 from typing import Optional
 
@@ -98,5 +99,13 @@ def parse_date(date_str: Optional[str], *, today: Optional["_date"] = None) -> O
         return datetime.strptime(date_str, "%m/%d/%Y").date().isoformat()
     except ValueError:
         pass
+
+    # Compact ISO ("20270419"). The length check matters: strptime("%Y%m%d")
+    # would also accept ambiguous short forms like "2027419".
+    if re.fullmatch(r"\d{8}", date_str):
+        try:
+            return datetime.strptime(date_str, "%Y%m%d").date().isoformat()
+        except ValueError:
+            pass
 
     return None

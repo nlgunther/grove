@@ -109,7 +109,7 @@ add --tag <n> [options]                  # full syntax
 | `--id False`          | Disable auto-ID                                   |
 | `-a <key=value>`      | Custom attribute (repeatable) — see below         |
 
-`--due` accepts all formats understood by `shared.dates.parse_date`: `today`, `tomorrow`, `+N`, weekday names, ISO, and US format.
+`--due` accepts all formats understood by `shared.dates.parse_date`: `today`, `tomorrow`, `+N`, weekday names, ISO, compact ISO (`YYYYMMDD`), and US format.
 
 ```bash
 add task "Review PR"
@@ -662,6 +662,7 @@ Both tools resolve `--due` values through `shared.dates.parse_date`.
 | `monday` … `sunday` | Next occurrence (never today)     |
 | `2026-12-25`        | ISO passthrough                   |
 | `12/25/2026`        | US format → ISO                   |
+| `20261225`          | Compact ISO → ISO (exactly 8 digits) |
 | anything else       | `None` (original value preserved) |
 
 Multi-word expressions require quotes: `--due "next friday"`.
@@ -738,9 +739,12 @@ text2ics [text] [-o OUTPUT] [--calendar-name NAME] [--tz TZ] [--extractor {heuri
 
 The **heuristic** extractor is offline and deterministic: one event per
 non-blank input line, each line needs an explicit date phrase
-(`today`/`tomorrow`/`+N`/a weekday name/an ISO or US date); time is
-optional and defaults to 9:00 AM. A line with no recognizable date raises
-rather than guessing.
+(`today`/`tomorrow`/`+N`/a weekday name/an ISO, compact `YYYYMMDD`, or US
+date). The time is optional and defaults to 9:00 AM; it may be written as
+12-hour (`3pm`, `9:30am`), 24-hour with a colon (`15:00`, `12:55`),
+`noon`, or `midnight`. A bare number without a colon or am/pm is never
+read as a time. A line with no recognizable date, or an invalid date or
+time (`20271399`, `25:00`), raises rather than guessing.
 
 The **llm** extractor calls the Claude API for free-form/multi-event text
 that doesn't fit the one-line-per-event contract. Requires
@@ -748,6 +752,11 @@ that doesn't fit the one-line-per-event contract. Requires
 
 ```bash
 text2ics "dentist tomorrow at 3pm" -o dentist.ics
+
+# One event per line, read from a file (works in cmd.exe and bash):
+#   Dentist piscotta 20270419 12:55
+#   Trial Vax blood draw 20261130 10:30
+uv run text2ics -o scheduleitems.ics < scheduleitems.txt
 
 text2ics -o week.ics <<EOF
 dentist tomorrow at 3pm
@@ -757,6 +766,10 @@ EOF
 
 text2ics --extractor llm "call mom sometime this weekend, and remind me to renew my passport before the Munich trip in June" -o events.ics
 ```
+
+Time zones use `zoneinfo`; Windows has no system tz database, so grove
+declares the `tzdata` package as a Windows-only dependency (installed
+automatically by `uv sync` / `pip install`).
 
 Each event's UID is a deterministic hash of title + start time (see
 [`text_to_ics.adapter`](#text_to_icsadapter) below), so re-importing the
@@ -778,6 +791,7 @@ parse_date("tomorrow")   # "2026-04-15"
 parse_date("+3")         # "2026-04-17"
 parse_date("monday")     # next Monday
 parse_date("2026-06-15") # "2026-06-15"
+parse_date("20260615")   # "2026-06-15" (compact form; exactly 8 digits)
 parse_date(None)         # None
 ```
 

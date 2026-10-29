@@ -14,6 +14,8 @@ tests/
 │   └── test_*.py                  # Smart Scheduler tests
 ├── shared/
 │   └── test_*.py                  # Shared infrastructure tests
+├── text_to_ics/
+│   └── test_*.py                  # text2ics converter tests
 └── integration/
     └── test_*.py                  # Cross-package integration tests
 ```
@@ -132,6 +134,15 @@ svc.storage.save_project(project)
 | `test_id_generator.py` | generate_id prefix/length; validate_id; extract/shorten |
 | `test_locking.py` | file_lock acquire/release; concurrent prevention; stale lock cleanup |
 | `test_ics_writer.py` | CalendarEvent / ICSWriter serialization; special-char escaping |
+| `test_dates.py` | parse_date compact `YYYYMMDD` support; malformed compact dates return None |
+
+### Text-to-ICS (`tests/text_to_ics/`)
+
+| File | What it covers |
+|---|---|
+| `test_heuristic_extractor.py` | One event per line; 12-hour and 24-hour times; compact `YYYYMMDD` dates; bare numbers not read as times; invalid date/time raises `ValueError` |
+| `test_adapter.py` | EventSpec → CalendarEvent conversion |
+| `test_cli.py` | `run()` produces a valid VCALENDAR; tz database available (catches missing `tzdata` on Windows); `main()` converts a `scheduleitems.txt`-style file from stdin; unparseable line returns exit code 1 |
 
 ### Integration (`tests/integration/`)
 

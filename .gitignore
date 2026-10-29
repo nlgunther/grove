@@ -90,7 +90,7 @@ coverage.xml
 *.xml
 *.txt
 *.png
-*.md
+# *.md
 *.npz
 *.html
 *.ics

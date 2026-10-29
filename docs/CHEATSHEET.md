@@ -62,7 +62,7 @@ add task "No ID" --id False
 add task "Custom" --id my-id-123
 ```
 
-`--due` accepts natural language: `today`, `tomorrow`, `yesterday`, `+N`, weekday names, `YYYY-MM-DD`, `MM/DD/YYYY`.
+`--due` accepts natural language: `today`, `tomorrow`, `yesterday`, `+N`, weekday names, `YYYY-MM-DD`, `YYYYMMDD`, `MM/DD/YYYY`.
 
 `--location` / `-l` is shorthand for `-a location=<value>`. Both produce the same XML attribute and are queryable with `//task[@location]`.
 
@@ -362,12 +362,15 @@ dentist tomorrow at 3pm
 team sync monday 9:30am
 EOF
 
+uv run text2ics -o items.ics < items.txt             # file, one event per line
 text2ics --tz America/New_York "..." -o out.ics       # non-default reference tz
 text2ics --extractor llm "..." -o out.ics             # Claude-backed, needs ANTHROPIC_API_KEY
 ```
 
 Heuristic backend (default) needs an explicit date word per line
-(today/tomorrow/+N/weekday/ISO/US date) — no date, no guess, it errors.
+(today/tomorrow/+N/weekday/ISO/YYYYMMDD/US date) — no date, no guess, it errors.
+Times: `3pm`, `9:30am`, `15:00`, `12:55`, `noon`, `midnight`; none -> 9:00 AM.
+Example line: `Dentist 20270419 12:55`.
 
 Import into Google Calendar: Settings -> Import & Export -> Import.
 
